@@ -8,10 +8,13 @@
 
 package org.opensearch.index.translog.transfer;
 
+import org.apache.lucene.store.OutputStreamIndexOutput;
 import org.opensearch.common.Nullable;
+import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.lucene.store.ByteArrayIndexInput;
 import org.opensearch.common.lucene.store.InputStreamIndexInput;
 import org.opensearch.common.util.io.IOUtils;
+import org.opensearch.core.common.bytes.BytesReference;
 
 import java.io.BufferedInputStream;
 import java.io.Closeable;

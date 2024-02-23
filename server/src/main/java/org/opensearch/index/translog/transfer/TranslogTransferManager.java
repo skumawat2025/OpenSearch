@@ -26,6 +26,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.index.remote.RemoteStoreUtils;
 import org.opensearch.index.remote.RemoteTranslogTransferTracker;
+import org.opensearch.index.translog.Checkpoint;
 import org.opensearch.index.translog.Translog;
 import org.opensearch.index.translog.transfer.listener.TranslogTransferListener;
 import org.opensearch.threadpool.ThreadPool;
@@ -113,6 +114,7 @@ public class TranslogTransferManager {
 
         try {
             toUpload.addAll(fileTransferTracker.exclusionFilter(transferSnapshot.getTranslogFileSnapshots()));
+            // will check if we can remove the below line. (First verify that we don't need all the translog-<gen>.ckp files to store
             toUpload.addAll(fileTransferTracker.exclusionFilter((transferSnapshot.getCheckpointFileSnapshots())));
             if (toUpload.isEmpty()) {
                 logger.trace("Nothing to upload for transfer");
@@ -168,6 +170,7 @@ public class TranslogTransferManager {
                 throw exception;
             }
             if (exceptionList.isEmpty()) {
+                // instead we should use metadata to store last (required checkpoint information).
                 TransferFileSnapshot tlogMetadata = prepareMetadata(transferSnapshot);
                 metadataBytesToUpload = tlogMetadata.getContentLength();
                 remoteTranslogTransferTracker.addUploadBytesStarted(metadataBytesToUpload);
@@ -239,13 +242,45 @@ public class TranslogTransferManager {
             location
         );
         // Download Checkpoint file from remote to local FS
-        String ckpFileName = Translog.getCommitCheckpointFileName(Long.parseLong(generation));
+        String ckpFileName = Translog.getCommitCheckpointFileName(Long.parseLong(generation)); // this will give me a FileName of tranlog-<gen>.ckp.
         downloadToFS(ckpFileName, location, primaryTerm);
         // Download translog file from remote to local FS
         String translogFilename = Translog.getFilename(Long.parseLong(generation));
         downloadToFS(translogFilename, location, primaryTerm);
         return true;
     }
+
+    // This function is used when metadata contains checkpoint file snapshot
+    public boolean downloadTranslogAndGetCheckpointFromMetadataFile(TransferFileSnapshot ckpFileSnapshot, String primaryTerm, String generation, Path location) throws IOException {
+
+        logger.trace(
+            "Downloading translog with: Primary Term = {}, Generation = {}, Location = {}",
+            primaryTerm,
+            generation,
+            location
+        );
+        // Download Checkpoint file from remote to local FS
+        String ckpFileName = Translog.getCommitCheckpointFileName(Long.parseLong(generation));
+
+        // Write the checkpoint snapshot object to local copy of translog-<gen>.ckp file.
+        // if (metadata_file_version  == 2)
+        Path filePath = location.resolve(ckpFileName);
+
+        // Here, we always override the existing file if present.
+        // We need to change this logic when we introduce incremental download
+        if (Files.exists(filePath)) {
+            Files.delete(filePath);
+        }
+        try (InputStream inputStream = ckpFileSnapshot.inputStream()){
+            Files.copy(inputStream, filePath);
+        }
+
+        // Download translog file from remote to local FS
+        String translogFilename = Translog.getFilename(Long.parseLong(generation));
+        downloadToFS(translogFilename, location, primaryTerm);
+        return true;
+    }
+
 
     private void downloadToFS(String fileName, Path location, String primaryTerm) throws IOException {
         Path filePath = location.resolve(fileName);
@@ -343,8 +378,22 @@ public class TranslogTransferManager {
                     snapshot -> String.valueOf(snapshot.getPrimaryTerm())
                 )
             );
+
+        Map<String, TransferFileSnapshot> generationCheckpointMap = transferSnapshot.getCheckpointFileSnapshots().stream().map(s -> {
+                assert s instanceof FileSnapshot.CheckpointFileSnapshot;
+                return (FileSnapshot.CheckpointFileSnapshot) s;
+            })
+            .collect(
+                Collectors.toMap(
+                    snapshot -> String.valueOf(snapshot.getGeneration()),
+                    snapshot -> (snapshot)
+                )
+            );
+
         TranslogTransferMetadata translogTransferMetadata = transferSnapshot.getTranslogTransferMetadata();
         translogTransferMetadata.setGenerationToPrimaryTermMapper(new HashMap<>(generationPrimaryTermMap));
+
+        translogTransferMetadata.setGenerationToCheckpointFileMapper(new HashMap<>(generationCheckpointMap));
 
         return new TransferFileSnapshot(
             translogTransferMetadata.getFileName(),

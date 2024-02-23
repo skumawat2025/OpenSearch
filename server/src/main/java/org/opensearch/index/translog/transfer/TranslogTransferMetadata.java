@@ -11,6 +11,7 @@ package org.opensearch.index.translog.transfer;
 import org.opensearch.common.SetOnce;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.index.remote.RemoteStoreUtils;
+import org.opensearch.index.translog.Checkpoint;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -34,6 +35,8 @@ public class TranslogTransferMetadata {
     private final int count;
 
     private final SetOnce<Map<String, String>> generationToPrimaryTermMapper = new SetOnce<>();
+
+    private final SetOnce<Map<String, FileSnapshot.TransferFileSnapshot>> generationToCheckpointFileMapper = new SetOnce<>();
 
     public static final String METADATA_SEPARATOR = "__";
 
@@ -83,6 +86,18 @@ public class TranslogTransferMetadata {
 
     public void setGenerationToPrimaryTermMapper(Map<String, String> generationToPrimaryTermMap) {
         generationToPrimaryTermMapper.set(generationToPrimaryTermMap);
+    }
+
+    public void setGenerationToCheckpointFileMapper(Map<String, FileSnapshot.TransferFileSnapshot> generationToCheckpointFileSnapshotMap) {
+        generationToCheckpointFileMapper.set(generationToCheckpointFileSnapshotMap);
+    }
+
+    public Map<String, FileSnapshot.TransferFileSnapshot> getGenerationToCheckpointFileMapper() {
+        return generationToCheckpointFileMapper.get();
+    }
+
+    public int getCurrentVersion() {
+        return CURRENT_VERSION;
     }
 
     public Map<String, String> getGenerationToPrimaryTermMapper() {

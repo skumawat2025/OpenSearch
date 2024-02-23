@@ -19,12 +19,7 @@ import org.opensearch.common.util.io.IOUtils;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.util.FileSystemUtils;
 import org.opensearch.index.remote.RemoteTranslogTransferTracker;
-import org.opensearch.index.translog.transfer.BlobStoreTransferService;
-import org.opensearch.index.translog.transfer.FileTransferTracker;
-import org.opensearch.index.translog.transfer.TransferSnapshot;
-import org.opensearch.index.translog.transfer.TranslogCheckpointTransferSnapshot;
-import org.opensearch.index.translog.transfer.TranslogTransferManager;
-import org.opensearch.index.translog.transfer.TranslogTransferMetadata;
+import org.opensearch.index.translog.transfer.*;
 import org.opensearch.index.translog.transfer.listener.TranslogTransferListener;
 import org.opensearch.repositories.Repository;
 import org.opensearch.repositories.blobstore.BlobStoreRepository;
@@ -32,6 +27,7 @@ import org.opensearch.threadpool.ThreadPool;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -206,6 +202,7 @@ public class RemoteFsTranslog extends Translog {
         long prevDownloadBytesSucceeded = statsTracker.getDownloadBytesSucceeded();
         long prevDownloadTimeInMillis = statsTracker.getTotalDownloadTimeInMillis();
         TranslogTransferMetadata translogMetadata = translogTransferManager.readMetadata();
+
         if (translogMetadata != null) {
             if (Files.notExists(location)) {
                 Files.createDirectories(location);
@@ -216,10 +213,22 @@ public class RemoteFsTranslog extends Translog {
                 Files.delete(file);
             }
 
+            // lets say we wanted to download from gen 99 to 91 (i.e minTranslogGeneration is 91)
             Map<String, String> generationToPrimaryTermMapper = translogMetadata.getGenerationToPrimaryTermMapper();
+            Map<String, FileSnapshot.TransferFileSnapshot> generationToCheckpointSnapshotMapper = translogMetadata.getGenerationToCheckpointFileMapper();
+            int metadataFileCurrentVersion = translogMetadata.getCurrentVersion();
+
             for (long i = translogMetadata.getGeneration(); i >= translogMetadata.getMinTranslogGeneration(); i--) {
                 String generation = Long.toString(i);
+                // This will download translog specific to a primaryTerm and generation.
+                // Applicable with metadata file version 1
+                assert metadataFileCurrentVersion == 1;
                 translogTransferManager.downloadTranslog(generationToPrimaryTermMapper.get(generation), generation, location);
+
+                // If metadatafile version is 2, we already have ckp file snapshot as part of metadata.
+                FileSnapshot.TransferFileSnapshot ckpFileSnapshot = generationToCheckpointSnapshotMapper.get(generation);
+                translogTransferManager.downloadTranslogAndGetCheckpointFromMetadataFile(ckpFileSnapshot, generationToPrimaryTermMapper.get(generation), generation, location);
+
             }
             logger.info(
                 "Downloaded translog and checkpoint files from={} to={}",
@@ -231,6 +240,7 @@ public class RemoteFsTranslog extends Translog {
 
             // We copy the latest generation .ckp file to translog.ckp so that flows that depend on
             // existence of translog.ckp file work in the same way
+            // here we copy the latest generation ckp file to translog.ckp file hence it looks like that we are just syncing remote ckp files to local.
             Files.copy(
                 location.resolve(Translog.getCommitCheckpointFileName(translogMetadata.getGeneration())),
                 location.resolve(Translog.CHECKPOINT_FILE_NAME)

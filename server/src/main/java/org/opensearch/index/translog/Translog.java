@@ -276,6 +276,7 @@ public abstract class Translog extends AbstractIndexShardComponent implements In
         try {
             // we first copy this into the temp-file and then fsync it followed by an atomic move into the target file
             // that way if we hit a disk-full here we are still in an consistent state.
+            // we are coping latest generation ckp file to translog.ckp file.
             Files.copy(location.resolve(CHECKPOINT_FILE_NAME), tempFile, StandardCopyOption.REPLACE_EXISTING);
             IOUtils.fsync(tempFile, false);
             Files.move(tempFile, targetPath, StandardCopyOption.ATOMIC_MOVE);
