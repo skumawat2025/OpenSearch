@@ -125,6 +125,8 @@ public interface TransferService {
      */
     InputStream downloadBlob(Iterable<String> path, String fileName) throws IOException;
 
+    List<Object> downloadBlobWithMetadata(Iterable<String> path, String fileName) throws IOException;
+
     void listAllInSortedOrder(Iterable<String> path, String filenamePrefix, int limit, ActionListener<List<BlobMetadata>> listener);
 
     void listAllInSortedOrderAsync(

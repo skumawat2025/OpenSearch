@@ -95,12 +95,7 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -116,6 +111,14 @@ class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamB
 
     private final S3BlobStore blobStore;
     private final String keyPath;
+
+    // Stores metadata related to a blobName in the given blob Container.
+    private Map<String, Map<String, String>> blobMetadata;
+
+    @Override
+    public void setBlobMetadata(Map<String, Map<String, String>> blobMetadata){
+        this.blobMetadata = blobMetadata;
+    }
 
     S3BlobContainer(BlobPath path, S3BlobStore blobStore) {
         super(path);
@@ -141,6 +144,13 @@ class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamB
     @Override
     public InputStream readBlob(String blobName) throws IOException {
         return new S3RetryingInputStream(blobStore, buildKey(blobName));
+    }
+
+    @Override
+    public List<Object> readBlobWithMetadata(String blobName) throws IOException{
+        S3RetryingInputStream s3InputStream =  new S3RetryingInputStream(blobStore, buildKey(blobName));
+        Map<String, String> metadata = s3InputStream.metadata;
+        return Arrays.asList(s3InputStream, metadata);
     }
 
     @Override
@@ -556,6 +566,7 @@ class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamB
         PutObjectRequest.Builder putObjectRequestBuilder = PutObjectRequest.builder()
             .bucket(blobStore.bucket())
             .key(blobName)
+            .metadata(blobMetadata.get(blobName))
             .contentLength(blobSize)
             .storageClass(blobStore.getStorageClass())
             .acl(blobStore.getCannedACL())

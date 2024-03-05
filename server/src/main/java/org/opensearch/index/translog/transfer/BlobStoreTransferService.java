@@ -30,10 +30,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 import static org.opensearch.common.blobstore.BlobContainer.BlobNameSortOrder.LEXICOGRAPHIC;
 
@@ -79,7 +76,9 @@ public class BlobStoreTransferService implements TransferService {
     public void uploadBlob(final TransferFileSnapshot fileSnapshot, Iterable<String> remoteTransferPath, WritePriority writePriority)
         throws IOException {
         BlobPath blobPath = (BlobPath) remoteTransferPath;
+        Map<String, Map<String, String>> blobMetadata = new HashMap<>();
         try (InputStream inputStream = fileSnapshot.inputStream()) {
+            blobStore.blobContainer(blobPath).setBlobMetadata(blobMetadata);
             blobStore.blobContainer(blobPath).writeBlobAtomic(fileSnapshot.getName(), inputStream, fileSnapshot.getContentLength(), true);
         }
     }
@@ -162,6 +161,11 @@ public class BlobStoreTransferService implements TransferService {
     @Override
     public InputStream downloadBlob(Iterable<String> path, String fileName) throws IOException {
         return blobStore.blobContainer((BlobPath) path).readBlob(fileName);
+    }
+
+    @Override
+    public List<Object> downloadBlobWithMetadata(Iterable<String> path, String fileName) throws IOException {
+        return blobStore.blobContainer((BlobPath) path).readBlobWithMetadata(fileName);
     }
 
     @Override

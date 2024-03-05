@@ -26,6 +26,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.index.remote.RemoteStoreUtils;
 import org.opensearch.index.remote.RemoteTranslogTransferTracker;
+import org.opensearch.index.translog.Checkpoint;
 import org.opensearch.index.translog.Translog;
 import org.opensearch.index.translog.transfer.listener.TranslogTransferListener;
 import org.opensearch.threadpool.ThreadPool;
@@ -33,6 +34,7 @@ import org.opensearch.threadpool.ThreadPool;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -104,7 +106,8 @@ public class TranslogTransferManager {
     public boolean transferSnapshot(TransferSnapshot transferSnapshot, TranslogTransferListener translogTransferListener)
         throws IOException {
         List<Exception> exceptionList = new ArrayList<>(transferSnapshot.getTranslogTransferMetadata().getCount());
-        Set<TransferFileSnapshot> toUpload = new HashSet<>(transferSnapshot.getTranslogTransferMetadata().getCount());
+        Set<TransferFileSnapshot> toUpload = new HashSet<>(transferSnapshot.getTranslogTransferMetadata().getCount()/2);
+        Set<TransferFileSnapshot> ckpSnapshots = new HashSet<>(transferSnapshot.getTranslogTransferMetadata().getCount()/2);
         long metadataBytesToUpload;
         long metadataUploadStartTime;
         long uploadStartTime;
@@ -113,7 +116,8 @@ public class TranslogTransferManager {
 
         try {
             toUpload.addAll(fileTransferTracker.exclusionFilter(transferSnapshot.getTranslogFileSnapshots()));
-            toUpload.addAll(fileTransferTracker.exclusionFilter((transferSnapshot.getCheckpointFileSnapshots())));
+            ckpSnapshots.addAll(fileTransferTracker.exclusionFilter(transferSnapshot.getCheckpointFileSnapshots()));
+            //toUpload.addAll(fileTransferTracker.exclusionFilter((transferSnapshot.getCheckpointFileSnapshots())));
             if (toUpload.isEmpty()) {
                 logger.trace("Nothing to upload for transfer");
                 return true;
@@ -238,13 +242,64 @@ public class TranslogTransferManager {
             generation,
             location
         );
-        // Download Checkpoint file from remote to local FS
-        String ckpFileName = Translog.getCommitCheckpointFileName(Long.parseLong(generation));
-        downloadToFS(ckpFileName, location, primaryTerm);
-        // Download translog file from remote to local FS
-        String translogFilename = Translog.getFilename(Long.parseLong(generation));
-        downloadToFS(translogFilename, location, primaryTerm);
+        // we'll calculate the metadata file version
+        int currentMetadataVersion = 2;
+        if(currentMetadataVersion == 1) {
+            // Download Checkpoint file from remote to local FS
+            String ckpFileName = Translog.getCommitCheckpointFileName(Long.parseLong(generation));
+            downloadToFS(ckpFileName, location, primaryTerm);
+            // Download translog file from remote to local FS
+            String translogFilename = Translog.getFilename(Long.parseLong(generation));
+            downloadToFS(translogFilename, location, primaryTerm);
+        } else{
+            String translogFilename = Translog.getFilename(Long.parseLong(generation));
+            downloadToFSWithCheckpointAdObjectMetadata(translogFilename, location, primaryTerm);
+        }
+
         return true;
+    }
+
+    private void downloadToFSWithCheckpointAdObjectMetadata(String fileName, Path location, String primaryTerm) throws IOException {
+        Path filePath = location.resolve(fileName);
+        // Here, we always override the existing file if present.
+        // We need to change this logic when we introduce incremental download
+        if (Files.exists(filePath)) {
+            Files.delete(filePath);
+        }
+
+        boolean downloadStatus = false;
+        long bytesToRead = 0, downloadStartTime = System.nanoTime();
+        try {
+            List<Object> listObjects = transferService.downloadBlobWithMetadata(remoteDataTransferPath.add(primaryTerm), fileName);
+            // Capture number of bytes for stats before reading
+            InputStream inputStream = (InputStream) listObjects.get(0);
+            bytesToRead = inputStream.available();
+            Files.copy(inputStream, filePath);
+            downloadStatus = true;
+
+            // Now convert metadata string to checkpoint object and write to local file.
+            Map<String, String> metadata = (Map<String, String>) listObjects.get(1);
+            Checkpoint checkpoint = Checkpoint.fromMetadataStringToCheckpoint(metadata.get("ckpAsString"));
+            String ckpFileName = Translog.getCommitCheckpointFileName(checkpoint.getGeneration());
+            Path ckpFilePath = location.resolve(ckpFileName);
+            byte[] ckpFileBytes = Checkpoint.createCheckpointBytes(ckpFilePath, checkpoint);
+            // Here, we always override the existing file if present.
+            // We need to change this logic when we introduce incremental download
+            if (Files.exists(ckpFilePath)) {
+                Files.delete(ckpFilePath);
+            }
+            Files.write(ckpFilePath, ckpFileBytes);
+
+
+        } finally {
+            remoteTranslogTransferTracker.addDownloadTimeInMillis((System.nanoTime() - downloadStartTime) / 1_000_000L);
+            if (downloadStatus) {
+                remoteTranslogTransferTracker.addDownloadBytesSucceeded(bytesToRead);
+            }
+        }
+
+        // Mark in FileTransferTracker so that the same files are not uploaded at the time of translog sync
+        fileTransferTracker.add(fileName, true);
     }
 
     private void downloadToFS(String fileName, Path location, String primaryTerm) throws IOException {

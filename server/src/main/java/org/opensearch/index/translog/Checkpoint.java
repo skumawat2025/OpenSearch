@@ -47,6 +47,7 @@ import org.apache.lucene.store.OutputStreamIndexOutput;
 import org.opensearch.common.annotation.PublicApi;
 import org.opensearch.common.io.Channels;
 import org.opensearch.index.seqno.SequenceNumbers;
+import org.opensearch.index.store.RemoteSegmentStoreDirectory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -76,6 +77,7 @@ public final class Checkpoint {
     private static final int CURRENT_VERSION = 4; // introduction of trimmed above seq#
 
     private static final String CHECKPOINT_CODEC = "ckp";
+    static final String SEPARATOR = "::";
 
     static final int V4_FILE_SIZE = CodecUtil.headerLength(CHECKPOINT_CODEC) + Integer.BYTES  // ops
         + Long.BYTES // offset
@@ -197,6 +199,28 @@ public final class Checkpoint {
             + ", trimmedAboveSeqNo="
             + trimmedAboveSeqNo
             + '}';
+    }
+
+    public String checkpointAsMetadataString() {
+        return String.join(
+            SEPARATOR,
+            String.valueOf(offset),
+            String.valueOf(numOps),
+            String.valueOf(generation),
+            String.valueOf(minSeqNo),
+            String.valueOf(maxSeqNo),
+            String.valueOf(globalCheckpoint),
+            String.valueOf(minTranslogGeneration),
+            String.valueOf(trimmedAboveSeqNo),
+            String.valueOf(CURRENT_VERSION)
+        );
+    }
+
+    public static Checkpoint fromMetadataStringToCheckpoint(String checkpointAsMetadataString){
+        String[] values = checkpointAsMetadataString.split(SEPARATOR);
+        Checkpoint checkpoint = new Checkpoint(Long.parseLong(values[0]), Integer.parseInt(values[1]), Long.parseLong(values[2]), Long.parseLong(values[3]), Long.parseLong(values[4]), Long.parseLong(values[5]), Long.parseLong(values[6]), Long.parseLong(values[7]));
+
+        return checkpoint;
     }
 
     public static Checkpoint read(Path path) throws IOException {

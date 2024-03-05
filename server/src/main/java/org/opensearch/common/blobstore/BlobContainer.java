@@ -38,10 +38,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.NoSuchFileException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * An interface for managing a repository of blob entries, where each blob entry is just a named group of bytes.
@@ -76,6 +73,10 @@ public interface BlobContainer {
      * @throws  IOException if the blob can not be read.
      */
     InputStream readBlob(String blobName) throws IOException;
+
+    default List<Object> readBlobWithMetadata(String blobName) throws IOException{
+        return Arrays.asList(null, null);
+    }
 
     /**
      * Creates a new {@link InputStream} that can be used to read the given blob starting from
@@ -195,6 +196,10 @@ public interface BlobContainer {
      * @throws  IOException if there were any failures in reading from the blob container.
      */
     Map<String, BlobMetadata> listBlobsByPrefix(String blobNamePrefix) throws IOException;
+
+    default void setBlobMetadata(Map<String,Map<String, String>> blobMetadata){
+
+    }
 
     /**
      * The type representing sort order of blob names

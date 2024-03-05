@@ -206,6 +206,9 @@ public class RemoteFsTranslog extends Translog {
         long prevDownloadBytesSucceeded = statsTracker.getDownloadBytesSucceeded();
         long prevDownloadTimeInMillis = statsTracker.getTotalDownloadTimeInMillis();
         TranslogTransferMetadata translogMetadata = translogTransferManager.readMetadata();
+
+        // get the metadata file version
+        int currentMetadataVersion = 2;
         if (translogMetadata != null) {
             if (Files.notExists(location)) {
                 Files.createDirectories(location);
