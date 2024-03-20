@@ -27,6 +27,8 @@ import org.opensearch.common.util.ByteUtils;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
@@ -55,6 +57,7 @@ public class RemoteTransferContainer implements Closeable {
     private final OffsetRangeInputStreamSupplier offsetRangeInputStreamSupplier;
     private final boolean isRemoteDataIntegritySupported;
     private final AtomicBoolean readBlock = new AtomicBoolean();
+    private Map<String, String> metadata = null;
 
     private static final Logger log = LogManager.getLogger(RemoteTransferContainer.class);
 
@@ -90,6 +93,28 @@ public class RemoteTransferContainer implements Closeable {
         this.isRemoteDataIntegritySupported = isRemoteDataIntegritySupported;
     }
 
+    public RemoteTransferContainer(
+        String fileName,
+        String remoteFileName,
+        long contentLength,
+        boolean failTransferIfFileExists,
+        WritePriority writePriority,
+        OffsetRangeInputStreamSupplier offsetRangeInputStreamSupplier,
+        long expectedChecksum,
+        boolean isRemoteDataIntegritySupported,
+        Map<String, String> metadata
+    ) {
+        this.fileName = fileName;
+        this.remoteFileName = remoteFileName;
+        this.contentLength = contentLength;
+        this.failTransferIfFileExists = failTransferIfFileExists;
+        this.writePriority = writePriority;
+        this.offsetRangeInputStreamSupplier = offsetRangeInputStreamSupplier;
+        this.expectedChecksum = expectedChecksum;
+        this.isRemoteDataIntegritySupported = isRemoteDataIntegritySupported;
+        this.metadata = metadata;
+    }
+
     /**
      * @return The {@link  WriteContext} for the current upload
      */
@@ -102,6 +127,7 @@ public class RemoteTransferContainer implements Closeable {
             writePriority,
             this::finalizeUpload,
             isRemoteDataIntegrityCheckPossible(),
+            metadata,
             isRemoteDataIntegrityCheckPossible() ? expectedChecksum : null
         );
     }

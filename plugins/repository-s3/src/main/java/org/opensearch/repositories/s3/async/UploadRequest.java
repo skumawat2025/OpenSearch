@@ -12,6 +12,7 @@ import org.opensearch.common.CheckedConsumer;
 import org.opensearch.common.blobstore.stream.write.WritePriority;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * A model encapsulating all details for an upload to S3
@@ -26,6 +27,8 @@ public class UploadRequest {
     private final Long expectedChecksum;
 
     private boolean uploadRetryEnabled;
+
+    private Map<String, String> metadata;
 
     /**
      * Construct a new UploadRequest object
@@ -56,6 +59,28 @@ public class UploadRequest {
         this.doRemoteDataIntegrityCheck = doRemoteDataIntegrityCheck;
         this.expectedChecksum = expectedChecksum;
         this.uploadRetryEnabled = uploadRetryEnabled;
+    }
+
+    public UploadRequest(
+        String bucket,
+        String key,
+        long contentLength,
+        WritePriority writePriority,
+        CheckedConsumer<Boolean, IOException> uploadFinalizer,
+        boolean doRemoteDataIntegrityCheck,
+        Long expectedChecksum,
+        boolean uploadRetryEnabled,
+        Map<String, String> metadata
+    ) {
+        this.bucket = bucket;
+        this.key = key;
+        this.contentLength = contentLength;
+        this.writePriority = writePriority;
+        this.uploadFinalizer = uploadFinalizer;
+        this.doRemoteDataIntegrityCheck = doRemoteDataIntegrityCheck;
+        this.expectedChecksum = expectedChecksum;
+        this.uploadRetryEnabled = uploadRetryEnabled;
+        this.metadata = metadata;
     }
 
     public String getBucket() {
@@ -89,4 +114,6 @@ public class UploadRequest {
     public boolean isUploadRetryEnabled() {
         return uploadRetryEnabled;
     }
+
+    public Map<String,String> getMetadata(){return metadata;}
 }

@@ -13,6 +13,7 @@ import org.opensearch.common.Nullable;
 import org.opensearch.common.StreamContext;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * WriteContext is used to encapsulate all data needed by <code>BlobContainer#writeStreams</code>
@@ -29,6 +30,8 @@ public class WriteContext {
     private final CheckedConsumer<Boolean, IOException> uploadFinalizer;
     private final boolean doRemoteDataIntegrityCheck;
     private final Long expectedChecksum;
+
+    private Map<String, String> metadata;
 
     /**
      * Construct a new WriteContext object
@@ -49,6 +52,7 @@ public class WriteContext {
         WritePriority writePriority,
         CheckedConsumer<Boolean, IOException> uploadFinalizer,
         boolean doRemoteDataIntegrityCheck,
+        Map<String, String> metadata,
         @Nullable Long expectedChecksum
     ) {
         this.fileName = fileName;
@@ -59,6 +63,7 @@ public class WriteContext {
         this.uploadFinalizer = uploadFinalizer;
         this.doRemoteDataIntegrityCheck = doRemoteDataIntegrityCheck;
         this.expectedChecksum = expectedChecksum;
+        this.metadata = metadata;
     }
 
     /**
@@ -130,5 +135,9 @@ public class WriteContext {
      */
     public Long getExpectedChecksum() {
         return expectedChecksum;
+    }
+
+    public Map<String, String> getMetadata() {
+        return metadata;
     }
 }

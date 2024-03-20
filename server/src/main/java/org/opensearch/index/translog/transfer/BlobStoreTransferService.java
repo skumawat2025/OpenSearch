@@ -76,9 +76,7 @@ public class BlobStoreTransferService implements TransferService {
     public void uploadBlob(final TransferFileSnapshot fileSnapshot, Iterable<String> remoteTransferPath, WritePriority writePriority)
         throws IOException {
         BlobPath blobPath = (BlobPath) remoteTransferPath;
-        Map<String, Map<String, String>> blobMetadata = new HashMap<>();
         try (InputStream inputStream = fileSnapshot.inputStream()) {
-            blobStore.blobContainer(blobPath).setBlobMetadata(blobMetadata);
             blobStore.blobContainer(blobPath).writeBlobAtomic(fileSnapshot.getName(), inputStream, fileSnapshot.getContentLength(), true);
         }
     }
@@ -95,7 +93,9 @@ public class BlobStoreTransferService implements TransferService {
             if (!(blobStore.blobContainer(blobPath) instanceof AsyncMultiStreamBlobContainer)) {
                 uploadBlob(ThreadPool.Names.TRANSLOG_TRANSFER, fileSnapshot, blobPath, listener, writePriority);
             } else {
-                uploadBlob(fileSnapshot, listener, blobPath, writePriority);
+                if (!(fileSnapshot instanceof FileSnapshot.CheckpointFileSnapshot)) {
+                    uploadBlob(fileSnapshot, listener, blobPath, writePriority);
+                }
             }
         });
 
@@ -108,6 +108,14 @@ public class BlobStoreTransferService implements TransferService {
         WritePriority writePriority
     ) {
 
+        String checkpointString = null;
+        Map<String, String> objectMetadata = new HashMap<>();
+        if (fileSnapshot instanceof FileSnapshot.TranslogFileSnapshot){
+            FileSnapshot.TranslogFileSnapshot tlogFileSnapshot = (FileSnapshot.TranslogFileSnapshot) fileSnapshot;
+            checkpointString = tlogFileSnapshot.getCheckpointString();
+            objectMetadata.put(FileSnapshot.TranslogFileSnapshot.CHECKPOINT_OBJECT_METADATA_KEY, checkpointString);
+        }
+
         try {
             ChannelFactory channelFactory = FileChannel::open;
             long contentLength;
@@ -116,6 +124,9 @@ public class BlobStoreTransferService implements TransferService {
             }
             boolean remoteIntegrityEnabled = false;
             BlobContainer blobContainer = blobStore.blobContainer(blobPath);
+
+            //blobContainer.addBlobMetadataForGivenBlob(fileSnapshot.getName(), objectMetadata);
+
             if (blobContainer instanceof AsyncMultiStreamBlobContainer) {
                 remoteIntegrityEnabled = ((AsyncMultiStreamBlobContainer) blobContainer).remoteIntegrityCheckSupported();
             }
@@ -127,7 +138,8 @@ public class BlobStoreTransferService implements TransferService {
                 writePriority,
                 (size, position) -> new OffsetRangeFileInputStream(fileSnapshot.getPath(), size, position),
                 Objects.requireNonNull(fileSnapshot.getChecksum()),
-                remoteIntegrityEnabled
+                remoteIntegrityEnabled,
+                objectMetadata
             );
             ActionListener<Void> completionListener = ActionListener.wrap(resp -> listener.onResponse(fileSnapshot), ex -> {
                 logger.error(() -> new ParameterizedMessage("Failed to upload blob {}", fileSnapshot.getName()), ex);
@@ -149,6 +161,8 @@ public class BlobStoreTransferService implements TransferService {
             logger.error(() -> new ParameterizedMessage("Failed to upload blob {}", fileSnapshot.getName()), e);
             listener.onFailure(new FileTransferException(fileSnapshot, e));
         } finally {
+            // we need to remove this key, value (need to double verify as this process is async, we might need to delete this key when the actual upload has happened).
+            // blobStore.blobContainer(blobPath).deleteObjectMetadataForGivenBlobName(fileSnapshot.getName());
             try {
                 fileSnapshot.close();
             } catch (IOException e) {
@@ -164,8 +178,13 @@ public class BlobStoreTransferService implements TransferService {
     }
 
     @Override
-    public List<Object> downloadBlobWithMetadata(Iterable<String> path, String fileName) throws IOException {
+    public InputStream downloadBlobWithMetadata(Iterable<String> path, String fileName) throws IOException {
         return blobStore.blobContainer((BlobPath) path).readBlobWithMetadata(fileName);
+    }
+
+    @Override
+    public Map<String, String> getBlobMetadata(Iterable<String> path, String fileName) {
+        return blobStore.blobContainer((BlobPath) path).readBlobMetadata(fileName);
     }
 
     @Override

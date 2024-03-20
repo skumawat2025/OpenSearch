@@ -112,13 +112,21 @@ class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamB
     private final S3BlobStore blobStore;
     private final String keyPath;
 
-    // Stores metadata related to a blobName in the given blob Container.
-    private Map<String, Map<String, String>> blobMetadata;
+//    // Stores metadata related to a blob in the blob Container. key is keyPath+blobName could be only blobName (TBD).
+//    private final Map<String, Map<String, String>> objectMetadata = new HashMap<>();
 
-    @Override
-    public void setBlobMetadata(Map<String, Map<String, String>> blobMetadata){
-        this.blobMetadata = blobMetadata;
-    }
+
+//    private void addEntryToBlobMetadataMap(String blobName, Map<String, String> mtdata) {
+//        objectMetadata.putIfAbsent(blobName, mtdata);
+//    }
+
+//    @Override
+//    public Map<String, String> readBlobMetadata(String blobName) {
+//        if (objectMetadata.containsKey(blobName)) {
+//            return objectMetadata.get(blobName);
+//        }
+//        return null;
+//    }
 
     S3BlobContainer(BlobPath path, S3BlobStore blobStore) {
         super(path);
@@ -146,12 +154,23 @@ class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamB
         return new S3RetryingInputStream(blobStore, buildKey(blobName));
     }
 
-    @Override
-    public List<Object> readBlobWithMetadata(String blobName) throws IOException{
-        S3RetryingInputStream s3InputStream =  new S3RetryingInputStream(blobStore, buildKey(blobName));
-        Map<String, String> metadata = s3InputStream.metadata;
-        return Arrays.asList(s3InputStream, metadata);
-    }
+//    @Override
+//    public InputStream readBlobWithMetadata(String blobName) throws IOException{
+//        S3RetryingInputStream s3InputStream =  new S3RetryingInputStream(blobStore, buildKey(blobName));
+//        Map<String, String> metadata = s3InputStream.metadata;
+//        addEntryToBlobMetadataMap(blobName, metadata);
+//        return s3InputStream;
+//    }
+
+//    @Override
+//    public void addBlobMetadataForGivenBlob(String blobName, Map<String, String> metadata){
+//        addEntryToBlobMetadataMap(blobName, metadata);
+//    }
+
+//    @Override
+//    public void deleteObjectMetadataForGivenBlobName(String blobName){
+//        objectMetadata.remove(blobName);
+//    }
 
     @Override
     public InputStream readBlob(String blobName, long position, long length) throws IOException {
@@ -200,7 +219,8 @@ class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamB
             writeContext.getUploadFinalizer(),
             writeContext.doRemoteDataIntegrityCheck(),
             writeContext.getExpectedChecksum(),
-            blobStore.isUploadRetryEnabled()
+            blobStore.isUploadRetryEnabled(),
+            writeContext.getMetadata()
         );
         try {
             if (uploadRequest.getContentLength() > ByteSizeUnit.GB.toBytes(10) && blobStore.isRedirectLargeUploads()) {
@@ -566,7 +586,6 @@ class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamB
         PutObjectRequest.Builder putObjectRequestBuilder = PutObjectRequest.builder()
             .bucket(blobStore.bucket())
             .key(blobName)
-            .metadata(blobMetadata.get(blobName))
             .contentLength(blobSize)
             .storageClass(blobStore.getStorageClass())
             .acl(blobStore.getCannedACL())

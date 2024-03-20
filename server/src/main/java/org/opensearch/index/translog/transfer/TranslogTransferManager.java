@@ -17,6 +17,7 @@ import org.opensearch.common.SetOnce;
 import org.opensearch.common.blobstore.BlobMetadata;
 import org.opensearch.common.blobstore.BlobPath;
 import org.opensearch.common.blobstore.stream.write.WritePriority;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.io.VersionedCodecStreamWrapper;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.logging.Loggers;
@@ -106,8 +107,7 @@ public class TranslogTransferManager {
     public boolean transferSnapshot(TransferSnapshot transferSnapshot, TranslogTransferListener translogTransferListener)
         throws IOException {
         List<Exception> exceptionList = new ArrayList<>(transferSnapshot.getTranslogTransferMetadata().getCount());
-        Set<TransferFileSnapshot> toUpload = new HashSet<>(transferSnapshot.getTranslogTransferMetadata().getCount()/2);
-        Set<TransferFileSnapshot> ckpSnapshots = new HashSet<>(transferSnapshot.getTranslogTransferMetadata().getCount()/2);
+        Set<TransferFileSnapshot> toUpload = new HashSet<>(transferSnapshot.getTranslogTransferMetadata().getCount());
         long metadataBytesToUpload;
         long metadataUploadStartTime;
         long uploadStartTime;
@@ -116,8 +116,7 @@ public class TranslogTransferManager {
 
         try {
             toUpload.addAll(fileTransferTracker.exclusionFilter(transferSnapshot.getTranslogFileSnapshots()));
-            ckpSnapshots.addAll(fileTransferTracker.exclusionFilter(transferSnapshot.getCheckpointFileSnapshots()));
-            //toUpload.addAll(fileTransferTracker.exclusionFilter((transferSnapshot.getCheckpointFileSnapshots())));
+            toUpload.addAll(fileTransferTracker.exclusionFilter((transferSnapshot.getCheckpointFileSnapshots())));
             if (toUpload.isEmpty()) {
                 logger.trace("Nothing to upload for transfer");
                 return true;
@@ -270,15 +269,15 @@ public class TranslogTransferManager {
         boolean downloadStatus = false;
         long bytesToRead = 0, downloadStartTime = System.nanoTime();
         try {
-            List<Object> listObjects = transferService.downloadBlobWithMetadata(remoteDataTransferPath.add(primaryTerm), fileName);
+            InputStream inputStream = transferService.downloadBlobWithMetadata(remoteDataTransferPath.add(primaryTerm), fileName);
             // Capture number of bytes for stats before reading
-            InputStream inputStream = (InputStream) listObjects.get(0);
+            //  inputStream = (InputStream) listObjects.get(0);
             bytesToRead = inputStream.available();
             Files.copy(inputStream, filePath);
             downloadStatus = true;
 
             // Now convert metadata string to checkpoint object and write to local file.
-            Map<String, String> metadata = (Map<String, String>) listObjects.get(1);
+            Map<String, String> metadata = transferService.getBlobMetadata(remoteBaseTransferPath.add(primaryTerm), fileName);
             Checkpoint checkpoint = Checkpoint.fromMetadataStringToCheckpoint(metadata.get("ckpAsString"));
             String ckpFileName = Translog.getCommitCheckpointFileName(checkpoint.getGeneration());
             Path ckpFilePath = location.resolve(ckpFileName);

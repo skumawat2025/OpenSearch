@@ -74,8 +74,12 @@ public interface BlobContainer {
      */
     InputStream readBlob(String blobName) throws IOException;
 
-    default List<Object> readBlobWithMetadata(String blobName) throws IOException{
-        return Arrays.asList(null, null);
+    default InputStream readBlobWithMetadata(String blobName) throws IOException{
+        return null;
+    }
+
+    default Map<String, String> readBlobMetadata(String blobName){
+        return new HashMap<>();
     }
 
     /**
@@ -197,7 +201,11 @@ public interface BlobContainer {
      */
     Map<String, BlobMetadata> listBlobsByPrefix(String blobNamePrefix) throws IOException;
 
-    default void setBlobMetadata(Map<String,Map<String, String>> blobMetadata){
+    default void addBlobMetadataForGivenBlob(String blobName, Map<String, String> metadata){
+
+    }
+
+    default void deleteObjectMetadataForGivenBlobName(String blobName){
 
     }
 
