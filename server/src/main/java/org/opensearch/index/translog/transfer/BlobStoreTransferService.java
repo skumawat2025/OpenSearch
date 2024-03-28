@@ -12,11 +12,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.opensearch.action.ActionRunnable;
-import org.opensearch.common.blobstore.AsyncMultiStreamBlobContainer;
-import org.opensearch.common.blobstore.BlobContainer;
-import org.opensearch.common.blobstore.BlobMetadata;
-import org.opensearch.common.blobstore.BlobPath;
-import org.opensearch.common.blobstore.BlobStore;
+import org.opensearch.common.blobstore.*;
 import org.opensearch.common.blobstore.stream.write.WriteContext;
 import org.opensearch.common.blobstore.stream.write.WritePriority;
 import org.opensearch.common.blobstore.transfer.RemoteTransferContainer;
@@ -30,10 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 import static org.opensearch.common.blobstore.BlobContainer.BlobNameSortOrder.LEXICOGRAPHIC;
 
@@ -96,7 +89,10 @@ public class BlobStoreTransferService implements TransferService {
             if (!(blobStore.blobContainer(blobPath) instanceof AsyncMultiStreamBlobContainer)) {
                 uploadBlob(ThreadPool.Names.TRANSLOG_TRANSFER, fileSnapshot, blobPath, listener, writePriority);
             } else {
-                uploadBlob(fileSnapshot, listener, blobPath, writePriority);
+                //!(fileSnapshot instanceof FileSnapshot.CheckpointFileSnapshot) we'll keep this condition for next...
+                if (true) {
+                    uploadBlob(fileSnapshot, listener, blobPath, writePriority);
+                }
             }
         });
 
@@ -108,6 +104,14 @@ public class BlobStoreTransferService implements TransferService {
         BlobPath blobPath,
         WritePriority writePriority
     ) {
+
+        String checkpointString = null;
+        Map<String, String> objectMetadata = new HashMap<>();
+        if (fileSnapshot instanceof FileSnapshot.TranslogFileSnapshot){
+            FileSnapshot.TranslogFileSnapshot tlogFileSnapshot = (FileSnapshot.TranslogFileSnapshot) fileSnapshot;
+            checkpointString = tlogFileSnapshot.getCheckpointString();
+            objectMetadata.put(FileSnapshot.TranslogFileSnapshot.CHECKPOINT_OBJECT_METADATA_KEY, checkpointString);
+        }
 
         try {
             ChannelFactory channelFactory = FileChannel::open;
@@ -128,7 +132,8 @@ public class BlobStoreTransferService implements TransferService {
                 writePriority,
                 (size, position) -> new OffsetRangeFileInputStream(fileSnapshot.getPath(), size, position),
                 Objects.requireNonNull(fileSnapshot.getChecksum()),
-                remoteIntegrityEnabled
+                remoteIntegrityEnabled,
+                objectMetadata
             );
             ActionListener<Void> completionListener = ActionListener.wrap(resp -> listener.onResponse(fileSnapshot), ex -> {
                 logger.error(() -> new ParameterizedMessage("Failed to upload blob {}", fileSnapshot.getName()), ex);
@@ -162,6 +167,11 @@ public class BlobStoreTransferService implements TransferService {
     @Override
     public InputStream downloadBlob(Iterable<String> path, String fileName) throws IOException {
         return blobStore.blobContainer((BlobPath) path).readBlob(fileName);
+    }
+
+    @Override
+    public DownloadBlobResponse downloadBlobWithMetadata(Iterable<String> path, String fileName) throws IOException {
+        return blobStore.blobContainer((BlobPath) path).readBlobWithMetadata(fileName);
     }
 
     @Override

@@ -32,6 +32,7 @@
 
 package org.opensearch.repositories.s3;
 
+import org.opensearch.common.blobstore.*;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.async.AsyncResponseTransformer;
 import software.amazon.awssdk.core.exception.SdkException;
@@ -71,12 +72,6 @@ import org.opensearch.common.Nullable;
 import org.opensearch.common.SetOnce;
 import org.opensearch.common.StreamContext;
 import org.opensearch.common.annotation.ExperimentalApi;
-import org.opensearch.common.blobstore.AsyncMultiStreamBlobContainer;
-import org.opensearch.common.blobstore.BlobContainer;
-import org.opensearch.common.blobstore.BlobMetadata;
-import org.opensearch.common.blobstore.BlobPath;
-import org.opensearch.common.blobstore.BlobStoreException;
-import org.opensearch.common.blobstore.DeleteResult;
 import org.opensearch.common.blobstore.stream.read.ReadContext;
 import org.opensearch.common.blobstore.stream.write.WriteContext;
 import org.opensearch.common.blobstore.stream.write.WritePriority;
@@ -144,6 +139,12 @@ class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamB
     }
 
     @Override
+    public DownloadBlobResponse readBlobWithMetadata(String blobName) throws IOException {
+        S3RetryingInputStream s3RetryingInputStream = new S3RetryingInputStream(blobStore, buildKey(blobName));
+        return new DownloadBlobResponse(s3RetryingInputStream, s3RetryingInputStream.getMetadata());
+    }
+
+    @Override
     public InputStream readBlob(String blobName, long position, long length) throws IOException {
         if (position < 0L) {
             throw new IllegalArgumentException("position must be non-negative");
@@ -190,7 +191,8 @@ class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamB
             writeContext.getUploadFinalizer(),
             writeContext.doRemoteDataIntegrityCheck(),
             writeContext.getExpectedChecksum(),
-            blobStore.isUploadRetryEnabled()
+            blobStore.isUploadRetryEnabled(),
+            writeContext.getMetadata()
         );
         try {
             if (uploadRequest.getContentLength() > ByteSizeUnit.GB.toBytes(10) && blobStore.isRedirectLargeUploads()) {
