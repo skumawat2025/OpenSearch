@@ -78,6 +78,19 @@ public interface BlobContainer {
     InputStream readBlob(String blobName) throws IOException;
 
     /**
+     * Creates a new {@link DownloadBlobResponse} for the given blob name.
+     *
+     * @param   blobName
+     *          The name of the blob to get an {@link InputStream} for.
+     * @return  The {@code InputStream} to read the blob.
+     * @throws  NoSuchFileException if the blob does not exist
+     * @throws  IOException if the blob can not be read.
+     */
+    default DownloadBlobResponse readBlobWithMetadata(String blobName) throws IOException{
+        return null;
+    };
+
+    /**
      * Creates a new {@link InputStream} that can be used to read the given blob starting from
      * a specific {@code position} in the blob. The {@code length} is an indication of the
      * number of bytes that are expected to be read from the {@link InputStream}.

@@ -13,15 +13,18 @@ import org.opensearch.common.lucene.store.ByteArrayIndexInput;
 import org.opensearch.common.lucene.store.InputStreamIndexInput;
 import org.opensearch.common.util.io.IOUtils;
 
+import java.io.ByteArrayInputStream;
 import java.io.BufferedInputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Objects;
 
 /**
@@ -153,10 +156,47 @@ public class FileSnapshot implements Closeable {
     public static final class TranslogFileSnapshot extends TransferFileSnapshot {
 
         private final long generation;
+        private String checkpointStringAsObjectMetadata;
+        private Path checkpointFilePath;
+        public final static String CHECKPOINT_OBJECT_METADATA_KEY = "ckpfile";
+
+        public String getCheckpointString(){
+            return this.checkpointStringAsObjectMetadata;
+        }
 
         public TranslogFileSnapshot(long primaryTerm, long generation, Path path, Long checksum) throws IOException {
             super(path, primaryTerm, checksum);
             this.generation = generation;
+        }
+
+        // Each TranslogFileSnapshot will have its checkpoint file path reference.
+        public TranslogFileSnapshot(long primaryTerm, long generation, Path path, Long checksum, Path checkpointFilePath) throws IOException {
+            super(path, primaryTerm, checksum);
+            this.generation = generation;
+            this.checkpointFilePath = checkpointFilePath;
+            this.checkpointStringAsObjectMetadata = createObjectMetadataOfCheckpoint(checkpointFilePath);
+        }
+
+        private String createObjectMetadataOfCheckpoint(Path checkpointFilePath) throws IOException {
+            Objects.requireNonNull(checkpointFilePath);
+            return createBase64EncodingOfCheckpoint(checkpointFilePath);
+        }
+
+        private String createBase64EncodingOfCheckpoint(Path checkpointFilePath) throws IOException {
+            try (FileChannel fileChannel = FileChannel.open(checkpointFilePath, StandardOpenOption.READ)) {
+                ByteBuffer buffer = ByteBuffer.allocate((int) fileChannel.size());
+                fileChannel.read(buffer);
+                buffer.flip();
+                return Base64.getEncoder().encodeToString(buffer.array());
+            }
+        }
+
+        public static byte[] convertBase64CheckpointStringToInputStream(String base64CheckpointString) {
+            if(base64CheckpointString == null){
+                return null;
+            }
+            byte[] decodedBytes = Base64.getDecoder().decode(base64CheckpointString);
+            return decodedBytes;
         }
 
         public long getGeneration() {
