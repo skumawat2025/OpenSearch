@@ -54,10 +54,7 @@ import org.junit.Before;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -72,9 +69,8 @@ import java.util.stream.IntStream;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 
+import static org.mockito.ArgumentMatchers.*;
 import static org.opensearch.repositories.s3.S3Repository.BULK_DELETE_SIZE;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
@@ -644,7 +640,7 @@ public class S3BlobContainerMockClientTests extends OpenSearchTestCase implement
                     }
                 }, partSize, calculateLastPartSize(blobSize, partSize), calculateNumberOfParts(blobSize, partSize));
             }
-        }, blobSize, false, WritePriority.HIGH, uploadSuccess -> { assertTrue(uploadSuccess); }, false, null, null), completionListener);
+        }, blobSize, false, WritePriority.HIGH, uploadSuccess -> { assertTrue(uploadSuccess); }, false, null, Collections.emptyMap()), completionListener);
 
         assertTrue(countDownLatch.await(5000, TimeUnit.SECONDS));
         if (expectException) {
@@ -652,7 +648,7 @@ public class S3BlobContainerMockClientTests extends OpenSearchTestCase implement
         } else {
             assertNull(exceptionRef.get());
         }
-        verify(s3BlobContainer, times(1)).executeMultipartUpload(any(S3BlobStore.class), anyString(), any(InputStream.class), anyLong());
+        verify(s3BlobContainer, times(1)).executeMultipartUpload(any(S3BlobStore.class), anyString(), any(InputStream.class), anyLong(), anyMap());
 
         if (expectException) {
             verify(client, times(1)).abortMultipartUpload(any(AbortMultipartUploadRequest.class));
