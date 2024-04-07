@@ -86,7 +86,17 @@ import org.opensearch.test.OpenSearchTestCase;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -420,10 +430,6 @@ public class S3BlobStoreContainerTests extends OpenSearchTestCase {
         final String bucketName = randomAlphaOfLengthBetween(1, 10);
         final String blobName = randomAlphaOfLengthBetween(1, 10);
 
-        final Map<String, String> metadata = new HashMap<>();
-        metadata.put("key1", "value1");
-        metadata.put("key2", "value2");
-
         final BlobPath blobPath = new BlobPath();
         if (randomBoolean()) {
             IntStream.of(randomIntBetween(1, 5)).forEach(value -> blobPath.add("path_" + value));
@@ -461,7 +467,7 @@ public class S3BlobStoreContainerTests extends OpenSearchTestCase {
         );
 
         final ByteArrayInputStream inputStream = new ByteArrayInputStream(new byte[blobSize]);
-        blobContainer.executeSingleUpload(blobStore, blobName, inputStream, blobSize, metadata);
+        blobContainer.executeSingleUpload(blobStore, blobName, inputStream, blobSize, null);
 
         final PutObjectRequest request = putObjectRequestArgumentCaptor.getValue();
         final RequestBody requestBody = requestBodyArgumentCaptor.getValue();
@@ -474,7 +480,6 @@ public class S3BlobStoreContainerTests extends OpenSearchTestCase {
         assertEquals(blobSize, request.contentLength().longValue());
         assertEquals(storageClass, request.storageClass());
         assertEquals(cannedAccessControlList, request.acl());
-        assertEquals(metadata, request.metadata());
         if (serverSideEncryption) {
             assertEquals(ServerSideEncryption.AES256, request.serverSideEncryption());
         }
@@ -507,10 +512,6 @@ public class S3BlobStoreContainerTests extends OpenSearchTestCase {
     public void testExecuteMultipartUpload() throws IOException {
         final String bucketName = randomAlphaOfLengthBetween(1, 10);
         final String blobName = randomAlphaOfLengthBetween(1, 10);
-
-        final Map<String, String> metadata = new HashMap<>();
-        metadata.put("key1", "value1");
-        metadata.put("key2", "value2");
 
         final BlobPath blobPath = new BlobPath();
         if (randomBoolean()) {
@@ -576,15 +577,13 @@ public class S3BlobStoreContainerTests extends OpenSearchTestCase {
 
         final ByteArrayInputStream inputStream = new ByteArrayInputStream(new byte[0]);
         final S3BlobContainer blobContainer = new S3BlobContainer(blobPath, blobStore);
-        blobContainer.executeMultipartUpload(blobStore, blobName, inputStream, blobSize, metadata);
+        blobContainer.executeMultipartUpload(blobStore, blobName, inputStream, blobSize, null);
 
         final CreateMultipartUploadRequest initRequest = createMultipartUploadRequestArgumentCaptor.getValue();
         assertEquals(bucketName, initRequest.bucket());
         assertEquals(blobPath.buildAsString() + blobName, initRequest.key());
         assertEquals(storageClass, initRequest.storageClass());
         assertEquals(cannedAccessControlList, initRequest.acl());
-        assertEquals(metadata, initRequest.metadata());
-
         if (serverSideEncryption) {
             assertEquals(ServerSideEncryption.AES256, initRequest.serverSideEncryption());
         }
