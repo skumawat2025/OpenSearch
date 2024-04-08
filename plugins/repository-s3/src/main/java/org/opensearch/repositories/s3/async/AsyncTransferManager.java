@@ -106,10 +106,12 @@ public final class AsyncTransferManager {
         CompletableFuture<Void> returnFuture = new CompletableFuture<>();
         try {
             if (streamContext.getNumberOfParts() == 1) {
+                log.info("using uploadInOneChunk()..to upload file = {}", uploadRequest.getKey());
                 log.debug(() -> "Starting the upload as a single upload part request");
                 uploadInOneChunk(s3AsyncClient, uploadRequest, streamContext.provideStream(0), returnFuture, statsMetricPublisher);
             } else {
                 log.debug(() -> "Starting the upload as multipart upload request");
+                log.info("using uploadInParts()..to upload file = {}", uploadRequest.getKey());
                 uploadInParts(s3AsyncClient, uploadRequest, streamContext, returnFuture, statsMetricPublisher);
             }
         } catch (Throwable throwable) {
@@ -129,6 +131,7 @@ public final class AsyncTransferManager {
 
         CreateMultipartUploadRequest.Builder createMultipartUploadRequestBuilder = CreateMultipartUploadRequest.builder()
             .bucket(uploadRequest.getBucket())
+            .metadata(uploadRequest.getMetadata())
             .key(uploadRequest.getKey())
             .overrideConfiguration(o -> o.addMetricPublisher(statsMetricPublisher.multipartUploadMetricCollector));
         if (uploadRequest.doRemoteDataIntegrityCheck()) {
@@ -324,6 +327,7 @@ public final class AsyncTransferManager {
     ) {
         PutObjectRequest.Builder putObjectRequestBuilder = PutObjectRequest.builder()
             .bucket(uploadRequest.getBucket())
+            .metadata(uploadRequest.getMetadata())
             .key(uploadRequest.getKey())
             .contentLength(uploadRequest.getContentLength())
             .overrideConfiguration(o -> o.addMetricPublisher(statsMetricPublisher.putObjectMetricPublisher));
