@@ -203,8 +203,10 @@ class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamB
         assert inputStream.markSupported() : "No mark support on inputStream breaks the S3 SDK's ability to retry requests";
         SocketAccess.doPrivilegedIOException(() -> {
             if (blobSize <= getLargeBlobThresholdInBytes()) {
+                logger.info("using executeSingleUpload()..to upload file = {}", blobName);
                 executeSingleUpload(blobStore, buildKey(blobName), inputStream, blobSize, metadata);
             } else {
+                logger.info("using executeMultipartUpload()..to upload file = {}", blobName);
                 executeMultipartUpload(blobStore, buildKey(blobName), inputStream, blobSize, metadata);
             }
             return null;
@@ -231,6 +233,7 @@ class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamB
                 );
                 InputStreamContainer inputStream = streamContext.provideStream(0);
                 try {
+                    logger.info("Using multipart upload method..");
                     executeMultipartUpload(
                         blobStore,
                         uploadRequest.getKey(),
