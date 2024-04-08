@@ -17,11 +17,13 @@ import java.io.BufferedInputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Objects;
 
 /**
@@ -153,10 +155,40 @@ public class FileSnapshot implements Closeable {
     public static final class TranslogFileSnapshot extends TransferFileSnapshot {
 
         private final long generation;
+        private Path checkpointFilePath;
+        private String checkpointDataAsString;
 
         public TranslogFileSnapshot(long primaryTerm, long generation, Path path, Long checksum) throws IOException {
             super(path, primaryTerm, checksum);
             this.generation = generation;
+        }
+
+        public TranslogFileSnapshot(long primaryTerm, long generation, Path path, Long checksum, Path checkpointPath) throws IOException {
+            super(path, primaryTerm, checksum);
+            this.generation = generation;
+            this.checkpointFilePath = checkpointPath;
+        }
+
+        public String provideCheckpointDataAsString() throws IOException {
+            this.checkpointDataAsString = buildCheckpointDataAsBase64String(checkpointFilePath);
+            return checkpointDataAsString;
+        }
+
+        static String buildCheckpointDataAsBase64String(Path checkpointFilePath) throws IOException {
+            try (FileChannel fileChannel = FileChannel.open(checkpointFilePath, StandardOpenOption.READ)) {
+                assert fileChannel.size() < 1500 : "checkpoint file size of more then 1.5KB size, can't be stored as metadata";
+                ByteBuffer buffer = ByteBuffer.allocate((int) fileChannel.size());
+                fileChannel.read(buffer);
+                buffer.flip();
+                return Base64.getEncoder().encodeToString(buffer.array());
+            }
+        }
+
+        public static byte[] convertBase64StringToCheckpointFileDataBytes(String base64CheckpointString) {
+            if (base64CheckpointString == null) {
+                return null;
+            }
+            return Base64.getDecoder().decode(base64CheckpointString);
         }
 
         public long getGeneration() {
