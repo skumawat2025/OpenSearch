@@ -268,8 +268,41 @@ public class TranslogTransferManager {
 
             logger.info("downloaded translog for fileName = {}, metadata = {}", fileName, metadata);
 
-            applyMetadataToCkpFile(metadata, location, generation, fileName);
+            if (metadata == null || metadata.isEmpty()) {
+                logger.info("metadata is null..using older method to look up ckp file..");
+                String ckpFileName = Translog.getCommitCheckpointFileName(Long.parseLong(generation));
+                downloadToFS(ckpFileName, location, primaryTerm);
+            }
+            else {
+                applyMetadataToCkpFile(metadata, location, generation, fileName);
+            }
 
+            bytesToRead = inputStream.available();
+            Files.copy(inputStream, filePath);
+            downloadStatus = true;
+        } finally {
+            remoteTranslogTransferTracker.addDownloadTimeInMillis((System.nanoTime() - downloadStartTime) / 1_000_000L);
+            if (downloadStatus) {
+                remoteTranslogTransferTracker.addDownloadBytesSucceeded(bytesToRead);
+            }
+        }
+
+        // Mark in FileTransferTracker so that the same files are not uploaded at the time of translog sync
+        fileTransferTracker.add(fileName, true);
+    }
+
+    private void downloadToFS(String fileName, Path location, String primaryTerm) throws IOException {
+        Path filePath = location.resolve(fileName);
+        // Here, we always override the existing file if present.
+        // We need to change this logic when we introduce incremental download
+        if (Files.exists(filePath)) {
+            Files.delete(filePath);
+        }
+
+        boolean downloadStatus = false;
+        long bytesToRead = 0, downloadStartTime = System.nanoTime();
+        try (InputStream inputStream = transferService.downloadBlob(remoteDataTransferPath.add(primaryTerm), fileName)) {
+            // Capture number of bytes for stats before reading
             bytesToRead = inputStream.available();
             Files.copy(inputStream, filePath);
             downloadStatus = true;
