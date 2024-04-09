@@ -14,6 +14,7 @@ import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.OutputStreamIndexOutput;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.common.SetOnce;
+import org.opensearch.common.blobstore.BlobDownloadResponse;
 import org.opensearch.common.blobstore.BlobMetadata;
 import org.opensearch.common.blobstore.BlobPath;
 import org.opensearch.common.blobstore.stream.write.WritePriority;
@@ -36,7 +37,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -108,7 +114,9 @@ public class TranslogTransferManager {
 
         try {
             toUpload.addAll(fileTransferTracker.exclusionFilter(transferSnapshot.getTranslogFileSnapshots()));
-            toUpload.addAll(fileTransferTracker.exclusionFilter((transferSnapshot.getCheckpointFileSnapshots())));
+            //skip checkpoint files...
+            //toUpload.addAll(fileTransferTracker.exclusionFilter((transferSnapshot.getCheckpointFileSnapshots())));
+
             if (toUpload.isEmpty()) {
                 logger.trace("Nothing to upload for transfer");
                 return true;
@@ -234,15 +242,15 @@ public class TranslogTransferManager {
             location
         );
         // Download Checkpoint file from remote to local FS
-        String ckpFileName = Translog.getCommitCheckpointFileName(Long.parseLong(generation));
-        downloadToFS(ckpFileName, location, primaryTerm);
+        //String ckpFileName = Translog.getCommitCheckpointFileName(Long.parseLong(generation));
+        //downloadToFS(ckpFileName, location, primaryTerm);
         // Download translog file from remote to local FS
         String translogFilename = Translog.getFilename(Long.parseLong(generation));
-        downloadToFS(translogFilename, location, primaryTerm);
+        downloadToFS(translogFilename, location, primaryTerm, generation);
         return true;
     }
 
-    private void downloadToFS(String fileName, Path location, String primaryTerm) throws IOException {
+    private void downloadToFS(String fileName, Path location, String primaryTerm, String generation) throws IOException {
         Path filePath = location.resolve(fileName);
         // Here, we always override the existing file if present.
         // We need to change this logic when we introduce incremental download
@@ -252,8 +260,16 @@ public class TranslogTransferManager {
 
         boolean downloadStatus = false;
         long bytesToRead = 0, downloadStartTime = System.nanoTime();
-        try (InputStream inputStream = transferService.downloadBlob(remoteDataTransferPath.add(primaryTerm), fileName)) {
+        BlobDownloadResponse downloaded = transferService.downloadBlobWithMetadata(remoteDataTransferPath.add(primaryTerm), fileName);
+        try {
             // Capture number of bytes for stats before reading
+            InputStream inputStream = downloaded.getInputStream();
+            Map<String, String> metadata = downloaded.getMetadata();
+
+            logger.info("downloaded translog for fileName = {}, metadata = {}", fileName, metadata);
+
+            applyMetadataToCkpFile(metadata, location, generation, fileName);
+
             bytesToRead = inputStream.available();
             Files.copy(inputStream, filePath);
             downloadStatus = true;

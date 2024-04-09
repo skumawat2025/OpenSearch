@@ -78,8 +78,9 @@ public class BlobStoreTransferService implements TransferService {
     public void uploadBlob(final TransferFileSnapshot fileSnapshot, Iterable<String> remoteTransferPath, WritePriority writePriority)
         throws IOException {
         BlobPath blobPath = (BlobPath) remoteTransferPath;
+        Map<String, String> metadata = prepareFileMetadata(fileSnapshot);
         try (InputStream inputStream = fileSnapshot.inputStream()) {
-            blobStore.blobContainer(blobPath).writeBlobAtomic(fileSnapshot.getName(), inputStream, fileSnapshot.getContentLength(), true);
+            blobStore.blobContainer(blobPath).writeBlobAtomicWithMetadata(fileSnapshot.getName(), inputStream, metadata, fileSnapshot.getContentLength(), true);
         }
     }
 
@@ -95,7 +96,14 @@ public class BlobStoreTransferService implements TransferService {
             if (!(blobStore.blobContainer(blobPath) instanceof AsyncMultiStreamBlobContainer)) {
                 uploadBlob(ThreadPool.Names.TRANSLOG_TRANSFER, fileSnapshot, blobPath, listener, writePriority);
             } else {
-                uploadBlob(fileSnapshot, listener, blobPath, writePriority);
+                if(!(fileSnapshot instanceof FileSnapshot.CheckpointFileSnapshot)) {
+                    logger.info("uploading file = {}", fileSnapshot.getName());
+                    try {
+                        uploadBlob(fileSnapshot, listener, blobPath, writePriority);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
             }
         });
 
@@ -120,7 +128,9 @@ public class BlobStoreTransferService implements TransferService {
         ActionListener<TransferFileSnapshot> listener,
         BlobPath blobPath,
         WritePriority writePriority
-    ) {
+    ) throws IOException {
+
+        Map<String, String> metadata = prepareFileMetadata(fileSnapshot);
 
         try {
             ChannelFactory channelFactory = FileChannel::open;
@@ -141,7 +151,8 @@ public class BlobStoreTransferService implements TransferService {
                 writePriority,
                 (size, position) -> new OffsetRangeFileInputStream(fileSnapshot.getPath(), size, position),
                 Objects.requireNonNull(fileSnapshot.getChecksum()),
-                remoteIntegrityEnabled
+                remoteIntegrityEnabled,
+                metadata
             );
             ActionListener<Void> completionListener = ActionListener.wrap(resp -> listener.onResponse(fileSnapshot), ex -> {
                 logger.error(() -> new ParameterizedMessage("Failed to upload blob {}", fileSnapshot.getName()), ex);
@@ -160,6 +171,7 @@ public class BlobStoreTransferService implements TransferService {
             ((AsyncMultiStreamBlobContainer) blobStore.blobContainer(blobPath)).asyncBlobUpload(writeContext, completionListener);
 
         } catch (Exception e) {
+            logger.info("Exception while uploading file = {} with metadata", fileSnapshot.getName());
             logger.error(() -> new ParameterizedMessage("Failed to upload blob {}", fileSnapshot.getName()), e);
             listener.onFailure(new FileTransferException(fileSnapshot, e));
         } finally {
