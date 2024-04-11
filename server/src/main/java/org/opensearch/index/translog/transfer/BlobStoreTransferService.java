@@ -130,6 +130,11 @@ public class BlobStoreTransferService implements TransferService {
         WritePriority writePriority
     ) throws IOException {
 
+        if (fileSnapshot instanceof FileSnapshot.CheckpointFileSnapshot){
+            logger.info("Checkpoint file = {} is stored as metadata of Translog file", fileSnapshot.getName());
+            listener.onResponse(fileSnapshot);
+            return;
+        }
         Map<String, String> metadata = prepareFileMetadata(fileSnapshot);
 
         try {
