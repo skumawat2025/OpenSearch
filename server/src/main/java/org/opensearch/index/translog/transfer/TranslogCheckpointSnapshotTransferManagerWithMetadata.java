@@ -33,8 +33,9 @@ public class TranslogCheckpointSnapshotTransferManagerWithMetadata implements Tr
                                                    Map<Long, BlobPath> blobPathMap,
                                                    LatchedActionListener<TranslogCheckpointSnapshot> latchedActionListener,
                                                    WritePriority writePriority) throws Exception {
-        Set<TransferFileSnapshot> filesToUpload = new HashSet<>();
+
         for( TranslogCheckpointSnapshot translogCheckpointSnapshot : toUpload) {
+            Set<TransferFileSnapshot> filesToUpload = new HashSet<>();
             filesToUpload.add(translogCheckpointSnapshot.getTranslogFileSnapshotWithMetadata());
             ActionListener<TransferFileSnapshot> actionListener = ActionListener.wrap(res -> {
                 latchedActionListener.onResponse(translogCheckpointSnapshot);
