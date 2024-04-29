@@ -131,18 +131,18 @@ public class TranslogTransferManager {
             fileTransferTracker.recordBytesForFiles(toUpload);
             captureStatsBeforeUpload();
             final CountDownLatch latch = new CountDownLatch(toUpload.size());
-            LatchedActionListener<TransferFileSnapshot> latchedActionListener = new LatchedActionListener<>(
+            LatchedActionListener<TranslogCheckpointSnapshot> latchedActionListener = new LatchedActionListener<>(
                 ActionListener.wrap(fileTransferTracker::onSuccess, ex -> {
-                    assert ex instanceof FileTransferException;
+                    assert ex instanceof GenerationTransferException;
                     logger.error(
                         () -> new ParameterizedMessage(
                             "Exception during transfer for file {}",
-                            ((FileTransferException) ex).getFileSnapshot().getName()
+                            ((GenerationTransferException) ex).getFileSnapshot().getGeneration()
                         ),
                         ex
                     );
-                    FileTransferException e = (FileTransferException) ex;
-                    TransferFileSnapshot file = e.getFileSnapshot();
+                    GenerationTransferException e = (GenerationTransferException) ex;
+                    TranslogCheckpointSnapshot file = e.getFileSnapshot();
                     fileTransferTracker.onFailure(file, ex);
                     exceptionList.add(ex);
                 }),

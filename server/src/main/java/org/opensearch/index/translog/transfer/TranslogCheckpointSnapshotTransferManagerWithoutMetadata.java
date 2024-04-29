@@ -46,7 +46,7 @@ public class TranslogCheckpointSnapshotTransferManagerWithoutMetadata implements
     public void transferTranslogCheckpointSnapshot(TransferSnapshot transferSnapshot,
                                                    Set<TranslogCheckpointSnapshot> toUpload,
                                                    Map<Long, BlobPath> blobPathMap,
-                                                   LatchedActionListener<FileSnapshot.TransferFileSnapshot> latchedActionListener,
+                                                   LatchedActionListener<TranslogCheckpointSnapshot> latchedActionListener,
                                                    WritePriority writePriority) throws Exception {
         for (TranslogCheckpointSnapshot tlogAndCkpTransferFileSnapshot : toUpload) {
             Set<FileSnapshot.TransferFileSnapshot> filesToUpload = new HashSet<>(2);
@@ -66,7 +66,7 @@ public class TranslogCheckpointSnapshotTransferManagerWithoutMetadata implements
             }
             if (filesToUpload.isEmpty()) {
                 logger.info("Nothing to upload for transfer");
-                latchedActionListener.onResponse(translogFileSnapshot);
+                latchedActionListener.onResponse(tlogAndCkpTransferFileSnapshot);
                 return;
             }
             final CountDownLatch latch = new CountDownLatch(filesToUpload.size());
@@ -76,7 +76,7 @@ public class TranslogCheckpointSnapshotTransferManagerWithoutMetadata implements
                     logger.error(
                         () -> new ParameterizedMessage(
                             "Exception during transfer for file {}",
-                            ((FileTransferException) ex).getFileSnapshot().getName()
+                            ((FileTransferException) ex).getFileSnapshot().getGeneration()
                         ),
                         ex
                     );
@@ -96,7 +96,7 @@ public class TranslogCheckpointSnapshotTransferManagerWithoutMetadata implements
                         "Timed out waiting for transfer of snapshot " + transferSnapshot + " to complete"
                     );
                     exceptionList.forEach(ex::addSuppressed);
-                    Exception exception = new FileTransferException(translogFileSnapshot, ex);
+                    Exception exception = new GenerationTransferException(tlogAndCkpTransferFileSnapshot, ex);
                     latchedActionListener.onFailure(exception);
                     return;
                 }
@@ -104,17 +104,17 @@ public class TranslogCheckpointSnapshotTransferManagerWithoutMetadata implements
                 Exception exception = new TranslogUploadFailedException("Failed to upload " + transferSnapshot, e);
                 exceptionList.forEach(exception::addSuppressed);
                 Thread.currentThread().interrupt();
-                Exception ex = new FileTransferException(translogFileSnapshot, exception);
+                Exception ex = new GenerationTransferException(tlogAndCkpTransferFileSnapshot, exception);
                 latchedActionListener.onFailure(ex);
                 return;
             }
 
-            if (fileTransferTracker.uploaded(tlogFileName) & fileTransferTracker.uploaded(ckpFileName)) {
-                latchedActionListener.onResponse(translogFileSnapshot);
+            if (exceptionList.isEmpty()) {
+                latchedActionListener.onResponse(tlogAndCkpTransferFileSnapshot);
             } else {
                 Exception ex = new TranslogUploadFailedException("Failed to upload snapshot " + tlogAndCkpTransferFileSnapshot);
                 exceptionList.forEach(ex::addSuppressed);
-                Exception exception = new FileTransferException(translogFileSnapshot, ex);
+                Exception exception = new GenerationTransferException(tlogAndCkpTransferFileSnapshot, ex);
                 latchedActionListener.onFailure(exception);
                 return;
             }

@@ -9,6 +9,7 @@
 package org.opensearch.index.translog.transfer.listener;
 
 import org.opensearch.index.translog.transfer.FileSnapshot.TransferFileSnapshot;
+import org.opensearch.index.translog.transfer.TranslogCheckpointSnapshot;
 
 /**
  * The listener to be invoked on the completion or failure of a {@link TransferFileSnapshot} or deletion of file
@@ -21,13 +22,13 @@ public interface FileTransferListener<T> {
      * Invoked when the transfer of a single {@link TransferFileSnapshot} succeeds
      * @param fileSnapshot the corresponding file snapshot
      */
-    void onSuccess(TransferFileSnapshot fileSnapshot);
+    void onSuccess(TranslogCheckpointSnapshot fileSnapshot);
 
     /**
      * Invoked when the transfer of a single {@link TransferFileSnapshot} fails
      * @param fileSnapshot the corresponding file snapshot
      * @param e the exception while processing the {@link TransferFileSnapshot}
      */
-    void onFailure(TransferFileSnapshot fileSnapshot, Exception e);
+    void onFailure(TranslogCheckpointSnapshot fileSnapshot, Exception e);
 
 }

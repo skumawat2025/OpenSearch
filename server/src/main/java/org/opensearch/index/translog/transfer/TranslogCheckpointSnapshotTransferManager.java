@@ -20,6 +20,6 @@ public interface TranslogCheckpointSnapshotTransferManager {
     public void transferTranslogCheckpointSnapshot(TransferSnapshot transferSnapshot,
                                                    Set<TranslogCheckpointSnapshot> toUpload,
                                                    Map<Long, BlobPath> blobPathMap,
-                                                   LatchedActionListener<FileSnapshot.TransferFileSnapshot> latchedActionListener,
+                                                   LatchedActionListener<TranslogCheckpointSnapshot> latchedActionListener,
                                                    WritePriority writePriority) throws Exception;
 }

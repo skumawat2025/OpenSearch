@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.translog.transfer.FileSnapshot.TransferFileSnapshot;
 
 public class TranslogCheckpointSnapshotTransferManagerWithMetadata implements TranslogCheckpointSnapshotTransferManager{
@@ -30,13 +31,18 @@ public class TranslogCheckpointSnapshotTransferManagerWithMetadata implements Tr
     public void transferTranslogCheckpointSnapshot(TransferSnapshot transferSnapshot,
                                                    Set<TranslogCheckpointSnapshot> toUpload,
                                                    Map<Long, BlobPath> blobPathMap,
-                                                   LatchedActionListener<FileSnapshot.TransferFileSnapshot> latchedActionListener,
+                                                   LatchedActionListener<TranslogCheckpointSnapshot> latchedActionListener,
                                                    WritePriority writePriority) throws Exception {
         Set<TransferFileSnapshot> filesToUpload = new HashSet<>();
-        for( TranslogCheckpointSnapshot translogCheckpointSnapshot : toUpload){
+        for( TranslogCheckpointSnapshot translogCheckpointSnapshot : toUpload) {
             filesToUpload.add(translogCheckpointSnapshot.getTranslogFileSnapshotWithMetadata());
-        }
+            ActionListener<TransferFileSnapshot> actionListener = ActionListener.wrap(res -> {
+                latchedActionListener.onResponse(translogCheckpointSnapshot);
+            }, ex -> {
+                latchedActionListener.onFailure(new GenerationTransferException(translogCheckpointSnapshot, ex));
+            });
 
-        transferService.uploadBlobs(filesToUpload, blobPathMap, latchedActionListener, WritePriority.HIGH);
+            transferService.uploadBlobs(filesToUpload, blobPathMap, actionListener, WritePriority.HIGH);
+        }
     }
 }

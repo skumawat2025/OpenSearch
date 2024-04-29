@@ -75,7 +75,7 @@ public class FileTransferTracker implements FileTransferListener {
     }
 
     @Override
-    public void onSuccess(TransferFileSnapshot fileSnapshot) {
+    public void onSuccess(TranslogCheckpointSnapshot fileSnapshot) {
         try {
             long durationInMillis = (System.nanoTime() - fileTransferStartTime) / 1_000_000L;
             remoteTranslogTransferTracker.addUploadTimeInMillis(durationInMillis);
@@ -120,7 +120,7 @@ public class FileTransferTracker implements FileTransferListener {
     }
 
     @Override
-    public void onFailure(TransferFileSnapshot fileSnapshot, Exception e) {
+    public void onFailure(TranslogCheckpointSnapshot fileSnapshot, Exception e) {
         long durationInMillis = (System.nanoTime() - fileTransferStartTime) / 1_000_000L;
         remoteTranslogTransferTracker.addUploadTimeInMillis(durationInMillis);
         long generation = fileSnapshot.getGeneration();
