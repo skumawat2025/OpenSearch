@@ -54,18 +54,18 @@ public class FileTransferTracker implements FileTransferListener {
         }
     }
 
-    void recordBytesForFiles(Set<TransferFileSnapshot> toUpload) {
+    void recordBytesForFiles(Set<TranslogCheckpointSnapshot> toUpload) {
         bytesForTlogCkpFileToUpload = new HashMap<>();
         toUpload.forEach(file -> {
             try {
-                bytesForTlogCkpFileToUpload.put(file.getName(), file.getContentLength());
+                bytesForTlogCkpFileToUpload.put(file.getTranslogFileName(), file.getTranslogFileContentLength());
             } catch (IOException ignored) {
-                bytesForTlogCkpFileToUpload.put(file.getName(), 0L);
+                bytesForTlogCkpFileToUpload.put(file.getTranslogFileName(), 0L);
             }
             try {
-                bytesForTlogCkpFileToUpload.put(file.getCkpFileName(), file.getCkpFileContentLength());
+                bytesForTlogCkpFileToUpload.put(file.getCheckpointFileName(), file.getCheckpointFileContentLength());
             } catch (IOException ignored) {
-                bytesForTlogCkpFileToUpload.put(file.getCkpFileName(), 0L);
+                bytesForTlogCkpFileToUpload.put(file.getCheckpointFileName(), 0L);
             }
         });
     }
@@ -79,8 +79,11 @@ public class FileTransferTracker implements FileTransferListener {
         try {
             long durationInMillis = (System.nanoTime() - fileTransferStartTime) / 1_000_000L;
             remoteTranslogTransferTracker.addUploadTimeInMillis(durationInMillis);
-            remoteTranslogTransferTracker.addUploadBytesSucceeded(bytesForTlogCkpFileToUpload.get(fileSnapshot.getName()));
-            remoteTranslogTransferTracker.addUploadBytesSucceeded(bytesForTlogCkpFileToUpload.get(fileSnapshot.getCkpFileName()));
+            long generation = fileSnapshot.getGeneration();
+            String translogFileName = Translog.getFilename(generation);
+            String checkpointFileName = Translog.getCommitCheckpointFileName(generation);
+            remoteTranslogTransferTracker.addUploadBytesSucceeded(bytesForTlogCkpFileToUpload.get(translogFileName));
+            remoteTranslogTransferTracker.addUploadBytesSucceeded(bytesForTlogCkpFileToUpload.get(checkpointFileName));
         } catch (Exception ex) {
             logger.error("Failure to update translog upload success stats", ex);
         }
@@ -120,8 +123,11 @@ public class FileTransferTracker implements FileTransferListener {
     public void onFailure(TransferFileSnapshot fileSnapshot, Exception e) {
         long durationInMillis = (System.nanoTime() - fileTransferStartTime) / 1_000_000L;
         remoteTranslogTransferTracker.addUploadTimeInMillis(durationInMillis);
-        remoteTranslogTransferTracker.addUploadBytesFailed(bytesForTlogCkpFileToUpload.get(fileSnapshot.getName()));
-        remoteTranslogTransferTracker.addUploadBytesFailed(bytesForTlogCkpFileToUpload.get(fileSnapshot.getCkpFileName()));
+        long generation = fileSnapshot.getGeneration();
+        String translogFileName = Translog.getFilename(generation);
+        String checkpointFileName = Translog.getCommitCheckpointFileName(generation);
+        remoteTranslogTransferTracker.addUploadBytesFailed(bytesForTlogCkpFileToUpload.get(translogFileName));
+        remoteTranslogTransferTracker.addUploadBytesFailed(bytesForTlogCkpFileToUpload.get(checkpointFileName));
         addGeneration(fileSnapshot.getGeneration(), TransferState.FAILED);
     }
 
@@ -149,7 +155,7 @@ public class FileTransferTracker implements FileTransferListener {
         return generationalFilesTransferTracker.get(generation) == TransferState.SUCCESS;
     }
 
-    public Set<TransferFileSnapshot> exclusionFilter(Set<TransferFileSnapshot> original) {
+    public Set<TranslogCheckpointSnapshot> exclusionFilter(Set<TranslogCheckpointSnapshot> original) {
         return original.stream()
             .filter(fileSnapshot -> generationalFilesTransferTracker.get(fileSnapshot.getGeneration()) != TransferState.SUCCESS)
             .collect(Collectors.toSet());

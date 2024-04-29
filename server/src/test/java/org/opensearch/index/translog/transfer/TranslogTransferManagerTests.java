@@ -33,6 +33,10 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
+import org.opensearch.index.translog.transfer.FileSnapshot.CheckpointFileSnapshot;
+import org.opensearch.index.translog.transfer.FileSnapshot.TranslogFileSnapshot;
+import org.opensearch.index.translog.transfer.TranslogCheckpointSnapshot;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -306,8 +310,53 @@ public class TranslogTransferManagerTests extends OpenSearchTestCase {
         uploadThread.get().interrupt();
     }
 
-    private TransferSnapshot createTransferSnapshot() throws IOException {
+    private TransferSnapshot createTransferSnapshot() {
         return new TransferSnapshot() {
+            @Override
+            public Set<TransferFileSnapshot> getCheckpointFileSnapshots() {
+                try {
+                    return Set.of(
+                        new CheckpointFileSnapshot(
+                            primaryTerm,
+                            generation,
+                            minTranslogGeneration,
+                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + generation, Translog.CHECKPOINT_SUFFIX),
+                            null
+                        ),
+                        new CheckpointFileSnapshot(
+                            primaryTerm,
+                            generation,
+                            minTranslogGeneration,
+                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + (generation - 1), Translog.CHECKPOINT_SUFFIX),
+                            null
+                        )
+                    );
+                } catch (IOException e) {
+                    throw new AssertionError("Failed to create temp file", e);
+                }
+            }
+
+            @Override
+            public Set<TransferFileSnapshot> getTranslogFileSnapshots() {
+                try {
+                    return Set.of(
+                        new TranslogFileSnapshot(
+                            primaryTerm,
+                            generation,
+                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + generation, Translog.TRANSLOG_FILE_SUFFIX),
+                            null
+                        ),
+                        new TranslogFileSnapshot(
+                            primaryTerm,
+                            generation - 1,
+                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + (generation - 1), Translog.TRANSLOG_FILE_SUFFIX),
+                            null
+                        )
+                    );
+                } catch (IOException e) {
+                    throw new AssertionError("Failed to create temp file", e);
+                }
+            }
 
             @Override
             public TranslogTransferMetadata getTranslogTransferMetadata() {
@@ -315,33 +364,8 @@ public class TranslogTransferManagerTests extends OpenSearchTestCase {
             }
 
             @Override
-            public Set<TransferFileSnapshot> getTranslogAndCheckpointFileSnapshots() {
-                try {
-                    return Set.of(
-                        new FileSnapshot.TranslogAndCheckpointFileSnapshot(
-                            primaryTerm,
-                            generation,
-                            minTranslogGeneration,
-                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + generation, Translog.TRANSLOG_FILE_SUFFIX),
-                            null,
-                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + generation, Translog.CHECKPOINT_SUFFIX),
-                            null,
-                            generation
-                        ),
-                        new FileSnapshot.TranslogAndCheckpointFileSnapshot(
-                            primaryTerm,
-                            generation - 1,
-                            minTranslogGeneration,
-                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + (generation - 1), Translog.TRANSLOG_FILE_SUFFIX),
-                            null,
-                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + (generation - 1), Translog.CHECKPOINT_SUFFIX),
-                            null,
-                            generation
-                        )
-                    );
-                } catch (IOException e) {
-                    throw new AssertionError("Failed to create temp file", e);
-                }
+            public Set<TranslogCheckpointSnapshot> getTranslogCheckpointSnapshots() {
+                return Set.of();
             }
 
             @Override

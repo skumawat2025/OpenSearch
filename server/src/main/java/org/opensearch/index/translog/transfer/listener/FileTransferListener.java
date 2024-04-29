@@ -15,7 +15,7 @@ import org.opensearch.index.translog.transfer.FileSnapshot.TransferFileSnapshot;
  *
  * @opensearch.internal
  */
-public interface FileTransferListener {
+public interface FileTransferListener<T> {
 
     /**
      * Invoked when the transfer of a single {@link TransferFileSnapshot} succeeds

@@ -67,7 +67,7 @@ public class TranslogTransferManager {
     private final RemoteTranslogTransferTracker remoteTranslogTransferTracker;
     private final RemoteStoreSettings remoteStoreSettings;
     private static final int METADATA_FILES_TO_FETCH = 10;
-    private final static String CHECKPOINT_FILE_DATA_KEY = "ckp-data";
+    final static String CHECKPOINT_FILE_DATA_KEY = "ckp-data";
 
     private final Logger logger;
 
@@ -116,9 +116,12 @@ public class TranslogTransferManager {
             boolean isBlobMetadataSupported = transferService.isBlobMetadataSupported();
             int totalFilesCount = transferSnapshot.getTranslogTransferMetadata().getCount();
             List<Exception> exceptionList = new ArrayList<>(totalFilesCount);
-            Set<TransferFileSnapshot> toUpload = new HashSet<>(totalFilesCount);
+            Set<TranslogCheckpointSnapshot> toUpload = new HashSet<>(totalFilesCount);
+//            Set<TransferFileSnapshot> toUpload = new HashSet<>(totalFilesCount);
 
-            toUpload.addAll(fileTransferTracker.exclusionFilter(transferSnapshot.getTranslogAndCheckpointFileSnapshots()));
+            toUpload.addAll(fileTransferTracker.exclusionFilter(transferSnapshot.getTranslogCheckpointSnapshots()));
+
+//            Map<String, TranslogCheckpointSnapshot> genToSnapshotMap = toUpload.stream().collect(Collectors.toMap(snapshot -> String.valueOf(snapshot.getGeneration()), snapshot-> snapshot));
 
             if (toUpload.isEmpty()) {
                 logger.trace("Nothing to upload for transfer");
@@ -160,15 +163,9 @@ public class TranslogTransferManager {
 
             // If the transferService of enabled blob store supports uploading object metadata, We don't need to transfer checkpoint file
             // snapshots separately. We can provide checkpoint file data as object metadata to tranlsog.tlog files.
-            if (isBlobMetadataSupported) {
-                for (TransferFileSnapshot transferFileSnapshot : toUpload) {
-                    Map<String, String> metadata = createCheckpointDataAsObjectMetadata(transferFileSnapshot);
-                    transferFileSnapshot.setTransferFileSnapshotMetadata(metadata);
-                }
-                transferService.uploadBlobs(toUpload, blobPathMap, latchedActionListener, WritePriority.HIGH);
-            } else {
-                transferTlogAndCkpFilesSeparately(transferSnapshot, toUpload, blobPathMap, latchedActionListener, WritePriority.HIGH);
-            }
+            TranslogCheckpointSnapshotTransferManager transferManager = new TranslogTransferManagerFactory(transferService, fileTransferTracker, remoteStoreSettings, shardId).getTranslogCheckpointSnapshotTransferManager(isBlobMetadataSupported);
+            transferManager.transferTranslogCheckpointSnapshot(transferSnapshot, toUpload, blobPathMap, latchedActionListener, WritePriority.HIGH);
+
 
             try {
                 if (latch.await(remoteStoreSettings.getClusterRemoteTranslogTransferTimeout().millis(), TimeUnit.MILLISECONDS) == false) {
@@ -216,108 +213,108 @@ public class TranslogTransferManager {
         }
     }
 
-    protected void transferTlogAndCkpFilesSeparately(
-        TransferSnapshot transferSnapshot,
-        Set<TransferFileSnapshot> toUpload,
-        Map<Long, BlobPath> blobPathMap,
-        LatchedActionListener<TransferFileSnapshot> latchedActionListener,
-        WritePriority writePriority
-    ) throws Exception {
-        for (TransferFileSnapshot tlogAndCkpTransferFileSnapshot : toUpload) {
-            Set<TransferFileSnapshot> filesToUpload = new HashSet<>(2);
-            Set<Exception> exceptionList = new HashSet<>(2);
+//    protected void transferTlogAndCkpFilesSeparately(
+//        TransferSnapshot transferSnapshot,
+//        Set<TranslogCheckpointSnapshot> toUpload,
+//        Map<Long, BlobPath> blobPathMap,
+//        LatchedActionListener<TransferFileSnapshot> latchedActionListener,
+//        WritePriority writePriority
+//    ) throws Exception {
+//        for (TranslogCheckpointSnapshot tlogAndCkpTransferFileSnapshot : toUpload) {
+//            Set<TransferFileSnapshot> filesToUpload = new HashSet<>(2);
+//            Set<Exception> exceptionList = new HashSet<>(2);
+//
+//            TransferFileSnapshot checkpointFileSnapshot = tlogAndCkpTransferFileSnapshot.getCheckpointFileSnapshot();
+//            TransferFileSnapshot translogFileSnapshot = tlogAndCkpTransferFileSnapshot.getTranslogFileSnapshot();
+//            String tlogFileName = translogFileSnapshot.getName();
+//            String ckpFileName = checkpointFileSnapshot.getName();
+//            Long generation = tlogAndCkpTransferFileSnapshot.getGeneration();
+//
+//            if (!fileTransferTracker.uploaded(tlogFileName)) {
+//                filesToUpload.add(translogFileSnapshot);
+//            }
+//            if (!fileTransferTracker.uploaded(ckpFileName)) {
+//                filesToUpload.add(checkpointFileSnapshot);
+//            }
+//            if (filesToUpload.isEmpty()) {
+//                logger.info("Nothing to upload for transfer");
+//                latchedActionListener.onResponse(translogFileSnapshot);
+//                return;
+//            }
+//            final CountDownLatch latch = new CountDownLatch(filesToUpload.size());
+//            LatchedActionListener<TransferFileSnapshot> onCompletionLatchedActionListener = new LatchedActionListener<>(
+//                ActionListener.wrap(fileSnapshot -> fileTransferTracker.add(fileSnapshot.getName(), true), ex -> {
+//                    assert ex instanceof FileTransferException;
+//                    logger.error(
+//                        () -> new ParameterizedMessage(
+//                            "Exception during transfer for file {}",
+//                            ((FileTransferException) ex).getFileSnapshot().getName()
+//                        ),
+//                        ex
+//                    );
+//                    FileTransferException e = (FileTransferException) ex;
+//                    TransferFileSnapshot file = e.getFileSnapshot();
+//                    fileTransferTracker.add(file.getName(), false);
+//                    exceptionList.add(ex);
+//                }),
+//                latch
+//            );
+//
+//            transferService.uploadBlobs(filesToUpload, blobPathMap, onCompletionLatchedActionListener, writePriority);
+//
+//            try {
+//                if (!latch.await(remoteStoreSettings.getClusterRemoteTranslogTransferTimeout().millis(), TimeUnit.MILLISECONDS)) {
+//                    Exception ex = new TranslogUploadFailedException(
+//                        "Timed out waiting for transfer of snapshot " + transferSnapshot + " to complete"
+//                    );
+//                    exceptionList.forEach(ex::addSuppressed);
+//                    Exception exception = new FileTransferException(translogFileSnapshot, ex);
+//                    latchedActionListener.onFailure(exception);
+//                    return;
+//                }
+//            } catch (InterruptedException e) {
+//                Exception exception = new TranslogUploadFailedException("Failed to upload " + transferSnapshot, e);
+//                exceptionList.forEach(exception::addSuppressed);
+//                Thread.currentThread().interrupt();
+//                Exception ex = new FileTransferException(translogFileSnapshot, exception);
+//                latchedActionListener.onFailure(ex);
+//                return;
+//            }
+//
+//            if (fileTransferTracker.uploaded(tlogFileName) & fileTransferTracker.uploaded(ckpFileName)) {
+//                latchedActionListener.onResponse(translogFileSnapshot);
+//            } else {
+//                Exception ex = new TranslogUploadFailedException("Failed to upload snapshot " + tlogAndCkpTransferFileSnapshot);
+//                exceptionList.forEach(ex::addSuppressed);
+//                Exception exception = new FileTransferException(translogFileSnapshot, ex);
+//                latchedActionListener.onFailure(exception);
+//                return;
+//            }
+//        }
+//    }
 
-            TransferFileSnapshot checkpointFileSnapshot;
-            checkpointFileSnapshot = tlogAndCkpTransferFileSnapshot.provideCheckpointFileSnapshot();
-            String tlogFileName = tlogAndCkpTransferFileSnapshot.getName();
-            String ckpFileName = checkpointFileSnapshot.getName();
-            Long generation = checkpointFileSnapshot.getGeneration();
-
-            if (!fileTransferTracker.uploaded(tlogFileName)) {
-                filesToUpload.add(tlogAndCkpTransferFileSnapshot);
-            }
-            if (!fileTransferTracker.uploaded(ckpFileName)) {
-                filesToUpload.add(checkpointFileSnapshot);
-            }
-            if (filesToUpload.isEmpty()) {
-                logger.info("Nothing to upload for transfer");
-                latchedActionListener.onResponse(tlogAndCkpTransferFileSnapshot);
-                return;
-            }
-            final CountDownLatch latch = new CountDownLatch(filesToUpload.size());
-            LatchedActionListener<TransferFileSnapshot> onCompletionLatchedActionListener = new LatchedActionListener<>(
-                ActionListener.wrap(fileSnapshot -> fileTransferTracker.add(fileSnapshot.getName(), true), ex -> {
-                    assert ex instanceof FileTransferException;
-                    logger.error(
-                        () -> new ParameterizedMessage(
-                            "Exception during transfer for file {}",
-                            ((FileTransferException) ex).getFileSnapshot().getName()
-                        ),
-                        ex
-                    );
-                    FileTransferException e = (FileTransferException) ex;
-                    TransferFileSnapshot file = e.getFileSnapshot();
-                    fileTransferTracker.add(file.getName(), false);
-                    exceptionList.add(ex);
-                }),
-                latch
-            );
-
-            transferService.uploadBlobs(filesToUpload, blobPathMap, onCompletionLatchedActionListener, writePriority);
-
-            try {
-                if (!latch.await(remoteStoreSettings.getClusterRemoteTranslogTransferTimeout().millis(), TimeUnit.MILLISECONDS)) {
-                    Exception ex = new TranslogUploadFailedException(
-                        "Timed out waiting for transfer of snapshot " + transferSnapshot + " to complete"
-                    );
-                    exceptionList.forEach(ex::addSuppressed);
-                    Exception exception = new FileTransferException(tlogAndCkpTransferFileSnapshot, ex);
-                    latchedActionListener.onFailure(exception);
-                    return;
-                }
-            } catch (InterruptedException e) {
-                Exception exception = new TranslogUploadFailedException("Failed to upload " + transferSnapshot, e);
-                exceptionList.forEach(exception::addSuppressed);
-                Thread.currentThread().interrupt();
-                Exception ex = new FileTransferException(tlogAndCkpTransferFileSnapshot, exception);
-                latchedActionListener.onFailure(ex);
-                return;
-            }
-
-            if (fileTransferTracker.uploaded(tlogFileName) & fileTransferTracker.uploaded(ckpFileName)) {
-                latchedActionListener.onResponse(tlogAndCkpTransferFileSnapshot);
-            } else {
-                Exception ex = new TranslogUploadFailedException("Failed to upload snapshot " + tlogAndCkpTransferFileSnapshot);
-                exceptionList.forEach(ex::addSuppressed);
-                Exception exception = new FileTransferException(tlogAndCkpTransferFileSnapshot, ex);
-                latchedActionListener.onFailure(exception);
-                return;
-            }
-        }
-    }
-
-    private Map<String, String> createCheckpointDataAsObjectMetadata(TransferFileSnapshot transferFileSnapshot) throws IOException {
-        Map<String, String> metadata = new HashMap<>();
-
-        byte[] fileBytes = createBytesArrayFromCheckpointFilePath(transferFileSnapshot.getCkpFilePath());
-
-        // Do checksum validation here.
-        TranslogCheckedContainer translogCheckedContainer = new TranslogCheckedContainer(fileBytes);
-        Long calculatedChecksum = translogCheckedContainer.getChecksum();
-
-        Long checksum = transferFileSnapshot.getCkpFileChecksum();
-        if (checksum != null && !checksum.equals(calculatedChecksum)) {
-            throw new TranslogUploadFailedException(
-                "Checksum validation of checkpoint file failed for translog file: " + transferFileSnapshot.getName()
-            );
-        }
-
-        // Set the file data value
-        String fileDataBase64String = Base64.getEncoder().encodeToString(fileBytes);
-        metadata.put(CHECKPOINT_FILE_DATA_KEY, fileDataBase64String);
-
-        return metadata;
-    }
+//    private Map<String, String> createCheckpointDataAsObjectMetadata(TransferFileSnapshot transferFileSnapshot) throws IOException {
+//        Map<String, String> metadata = new HashMap<>();
+//
+//        byte[] fileBytes = createBytesArrayFromCheckpointFilePath(transferFileSnapshot.getCkpFilePath());
+//
+//        // Do checksum validation here.
+//        TranslogCheckedContainer translogCheckedContainer = new TranslogCheckedContainer(fileBytes);
+//        Long calculatedChecksum = translogCheckedContainer.getChecksum();
+//
+//        Long checksum = transferFileSnapshot.getCkpFileChecksum();
+//        if (checksum != null && !checksum.equals(calculatedChecksum)) {
+//            throw new TranslogUploadFailedException(
+//                "Checksum validation of checkpoint file failed for translog file: " + transferFileSnapshot.getName()
+//            );
+//        }
+//
+//        // Set the file data value
+//        String fileDataBase64String = Base64.getEncoder().encodeToString(fileBytes);
+//        metadata.put(CHECKPOINT_FILE_DATA_KEY, fileDataBase64String);
+//
+//        return metadata;
+//    }
 
     private byte[] createBytesArrayFromCheckpointFilePath(Path ckpFilePath) throws IOException {
         Checkpoint checkpoint = Checkpoint.read(ckpFilePath);
@@ -547,9 +544,9 @@ public class TranslogTransferManager {
     }
 
     private TransferFileSnapshot prepareMetadata(TransferSnapshot transferSnapshot) throws IOException {
-        Map<String, String> generationPrimaryTermMap = transferSnapshot.getTranslogAndCheckpointFileSnapshots().stream().map(s -> {
-            assert s instanceof FileSnapshot.TranslogAndCheckpointFileSnapshot;
-            return (FileSnapshot.TranslogAndCheckpointFileSnapshot) s;
+        Map<String, String> generationPrimaryTermMap = transferSnapshot.getTranslogCheckpointSnapshots().stream().map(s -> {
+            assert s instanceof TranslogCheckpointSnapshot;
+            return s;
         })
             .collect(
                 Collectors.toMap(
@@ -557,6 +554,8 @@ public class TranslogTransferManager {
                     snapshot -> String.valueOf(snapshot.getPrimaryTerm())
                 )
             );
+
+        Map<String, TranslogCheckpointSnapshot> genToSnapshotMap = transferSnapshot.getTranslogCheckpointSnapshots().stream().collect(Collectors.toMap(snapshot -> String.valueOf(snapshot.getGeneration()), snapshot-> snapshot));
         TranslogTransferMetadata translogTransferMetadata = transferSnapshot.getTranslogTransferMetadata();
         translogTransferMetadata.setGenerationToPrimaryTermMapper(new HashMap<>(generationPrimaryTermMap));
 
