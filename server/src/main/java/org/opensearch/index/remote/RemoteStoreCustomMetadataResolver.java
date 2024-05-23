@@ -9,16 +9,22 @@
 package org.opensearch.index.remote;
 
 import org.opensearch.Version;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.annotation.ExperimentalApi;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.index.remote.RemoteStoreEnums.PathHashAlgorithm;
 import org.opensearch.index.remote.RemoteStoreEnums.PathType;
 import org.opensearch.indices.RemoteStoreSettings;
+import org.opensearch.node.Node;
 import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.repositories.Repository;
 import org.opensearch.repositories.RepositoryMissingException;
 import org.opensearch.repositories.blobstore.BlobStoreRepository;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 import static org.opensearch.node.remotestore.RemoteStoreNodeAttribute.getRemoteStoreTranslogRepo;
@@ -31,18 +37,24 @@ import static org.opensearch.node.remotestore.RemoteStoreNodeAttribute.getRemote
 @ExperimentalApi
 public class RemoteStoreCustomMetadataResolver {
 
+    public final static String PATH_TYPE_ATTRIBUTE_KEY = "optimised_remote_store_enable";
+    public final static String PATH_TYPE_NODE_ATTR_KEY = Node.NODE_ATTRIBUTES.getKey() + PATH_TYPE_ATTRIBUTE_KEY;
+
     private final RemoteStoreSettings remoteStoreSettings;
+    private final ClusterService clusterService;
     private final Supplier<Version> minNodeVersionSupplier;
     private final Supplier<RepositoriesService> repositoriesServiceSupplier;
     private final Settings settings;
 
     public RemoteStoreCustomMetadataResolver(
         RemoteStoreSettings remoteStoreSettings,
+        ClusterService clusterService,
         Supplier<Version> minNodeVersionSupplier,
         Supplier<RepositoriesService> repositoriesServiceSupplier,
         Settings settings
     ) {
         this.remoteStoreSettings = remoteStoreSettings;
+        this.clusterService = Objects.requireNonNull(clusterService);
         this.minNodeVersionSupplier = minNodeVersionSupplier;
         this.repositoriesServiceSupplier = repositoriesServiceSupplier;
         this.settings = settings;
@@ -52,10 +64,27 @@ public class RemoteStoreCustomMetadataResolver {
         PathType pathType;
         PathHashAlgorithm pathHashAlgorithm;
         // Min node version check ensures that we are enabling the new prefix type only when all the nodes understand it.
-        pathType = Version.V_2_14_0.compareTo(minNodeVersionSupplier.get()) <= 0 ? remoteStoreSettings.getPathType() : PathType.FIXED;
+        pathType = isPathTypeEnabled() ? remoteStoreSettings.getPathType() : PathType.FIXED;
         // If the path type is fixed, hash algorithm is not applicable.
         pathHashAlgorithm = pathType == PathType.FIXED ? null : remoteStoreSettings.getPathHashAlgorithm();
         return new RemoteStorePathStrategy(pathType, pathHashAlgorithm);
+    }
+
+    private boolean isPathTypeEnabled() {
+        Map<String, DiscoveryNode> nodesMap = Collections.unmodifiableMap(clusterService.state().nodes().getNodes());
+
+        if (nodesMap.isEmpty()) {
+            return false;
+        }
+
+        for (String node : nodesMap.keySet()) {
+            DiscoveryNode nodeDiscovery = nodesMap.get(node);
+            Map<String, String> nodeAttributes = nodeDiscovery.getAttributes();
+            if (!nodeAttributes.containsKey(PATH_TYPE_ATTRIBUTE_KEY)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public boolean isTranslogMetadataEnabled() {

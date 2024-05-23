@@ -55,6 +55,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.opensearch.cluster.metadata.IndexMetadata.SETTING_REMOTE_STORE_ENABLED;
+import static org.opensearch.index.remote.RemoteStoreCustomMetadataResolver.PATH_TYPE_NODE_ATTR_KEY;
 import static org.opensearch.index.remote.RemoteStoreEnums.DataCategory.SEGMENTS;
 import static org.opensearch.index.remote.RemoteStoreEnums.DataCategory.TRANSLOG;
 import static org.opensearch.index.remote.RemoteStoreEnums.DataType.DATA;
@@ -215,8 +216,9 @@ public class RemoteRestoreSnapshotIT extends AbstractSnapshotIntegTestCase {
      * on snapshot restore.
      */
     public void testRemoteStoreCustomDataOnIndexCreationAndRestore() {
-        String clusterManagerNode = internalCluster().startClusterManagerOnlyNode();
-        internalCluster().startDataOnlyNode();
+        Settings pathTypeSetting = Settings.builder().put(PATH_TYPE_NODE_ATTR_KEY, true).build();
+        String clusterManagerNode = internalCluster().startClusterManagerOnlyNode(pathTypeSetting);
+        internalCluster().startDataOnlyNode(pathTypeSetting);
         String indexName1 = "testindex1";
         String indexName2 = "testindex2";
         String snapshotRepoName = "test-restore-snapshot-repo";

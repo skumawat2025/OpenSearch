@@ -74,6 +74,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.IndexSettings;
 import org.opensearch.index.mapper.MapperService;
 import org.opensearch.index.query.QueryShardContext;
+import org.opensearch.index.remote.RemoteStoreCustomMetadataResolver;
 import org.opensearch.index.remote.RemoteStoreEnums.PathHashAlgorithm;
 import org.opensearch.index.remote.RemoteStoreEnums.PathType;
 import org.opensearch.index.translog.Translog;
@@ -1754,8 +1755,14 @@ public class MetadataCreateIndexServiceTests extends OpenSearchTestCase {
         Metadata metadata = Metadata.builder()
             .transientSettings(Settings.builder().put(Metadata.DEFAULT_REPLICA_COUNT_SETTING.getKey(), 1).build())
             .build();
+        DiscoveryNodes discoveryNodes = mock(DiscoveryNodes.class);
+        DiscoveryNode discoveryNode = mock(DiscoveryNode.class);
+        when(discoveryNode.getAttributes()).thenReturn(Map.of(RemoteStoreCustomMetadataResolver.PATH_TYPE_ATTRIBUTE_KEY, "true"));
+        when(discoveryNodes.getNodes()).thenReturn(Map.of("node-1", discoveryNode));
+        when(discoveryNodes.getMinNodeVersion()).thenReturn(Version.V_2_15_0);
         ClusterState clusterState = ClusterState.builder(org.opensearch.cluster.ClusterName.CLUSTER_NAME_SETTING.getDefault(Settings.EMPTY))
             .metadata(metadata)
+            .nodes(discoveryNodes)
             .build();
         ClusterSettings clusterSettings = new ClusterSettings(settings, ClusterSettings.BUILT_IN_CLUSTER_SETTINGS);
         when(clusterService.getSettings()).thenReturn(settings);

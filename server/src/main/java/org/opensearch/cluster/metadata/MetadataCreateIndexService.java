@@ -215,7 +215,13 @@ public class MetadataCreateIndexService {
         createIndexTaskKey = clusterService.registerClusterManagerTask(ClusterManagerTaskKeys.CREATE_INDEX_KEY, true);
         Supplier<Version> minNodeVersionSupplier = () -> clusterService.state().nodes().getMinNodeVersion();
         remoteStoreCustomMetadataResolver = isRemoteDataAttributePresent(settings)
-            ? new RemoteStoreCustomMetadataResolver(remoteStoreSettings, minNodeVersionSupplier, repositoriesServiceSupplier, settings)
+            ? new RemoteStoreCustomMetadataResolver(
+                remoteStoreSettings,
+                clusterService,
+                minNodeVersionSupplier,
+                repositoriesServiceSupplier,
+                settings
+            )
             : null;
     }
 
@@ -256,7 +262,8 @@ public class MetadataCreateIndexService {
 
     /**
      * Validates (if this index has a dot-prefixed name) whether it follows the rules for dot-prefixed indices.
-     * @param index The name of the index in question
+     *
+     * @param index    The name of the index in question
      * @param isHidden Whether or not this is a hidden index
      */
     public boolean validateDotIndex(String index, @Nullable Boolean isHidden) {
@@ -323,7 +330,7 @@ public class MetadataCreateIndexService {
      * the timeout, then {@link CreateIndexClusterStateUpdateResponse#isShardsAcknowledged()} will
      * return true, otherwise if the operation timed out, then it will return false.
      *
-     * @param request the index creation cluster state update request
+     * @param request  the index creation cluster state update request
      * @param listener the listener on which to send the index creation cluster state update response
      */
     public void createIndex(
@@ -474,14 +481,15 @@ public class MetadataCreateIndexService {
      * Given the state and a request as well as the metadata necessary to build a new index,
      * validate the configuration with an actual index service as return a new cluster state with
      * the index added (and rerouted)
-     * @param currentState the current state to base the new state off of
-     * @param request the create index request
-     * @param silent a boolean for whether logging should be at a lower or higher level
-     * @param sourceMetadata when recovering from an existing index, metadata that should be copied to the new index
-     * @param temporaryIndexMeta metadata for the new index built from templates, source metadata, and request settings
-     * @param mappings a list of all mapping definitions to apply, in order
-     * @param aliasSupplier a function that takes the real {@link IndexService} and returns a list of {@link AliasMetadata} aliases
-     * @param templatesApplied a list of the names of the templates applied, for logging
+     *
+     * @param currentState        the current state to base the new state off of
+     * @param request             the create index request
+     * @param silent              a boolean for whether logging should be at a lower or higher level
+     * @param sourceMetadata      when recovering from an existing index, metadata that should be copied to the new index
+     * @param temporaryIndexMeta  metadata for the new index built from templates, source metadata, and request settings
+     * @param mappings            a list of all mapping definitions to apply, in order
+     * @param aliasSupplier       a function that takes the real {@link IndexService} and returns a list of {@link AliasMetadata} aliases
+     * @param templatesApplied    a list of the names of the templates applied, for logging
      * @param metadataTransformer if provided, a function that may alter cluster metadata in the same cluster state update that
      *                            creates the index
      * @return a new cluster state with the index added
@@ -1002,9 +1010,10 @@ public class MetadataCreateIndexService {
     /**
      * Updates index settings to set replication strategy by default based on cluster level settings or remote store
      * node attributes
-     * @param settingsBuilder index settings builder to be updated with relevant settings
-     * @param requestSettings settings passed in during index create request
-     * @param clusterSettings cluster level settings
+     *
+     * @param settingsBuilder          index settings builder to be updated with relevant settings
+     * @param requestSettings          settings passed in during index create request
+     * @param clusterSettings          cluster level settings
      * @param combinedTemplateSettings combined template settings which satisfy the index
      */
     public static void updateReplicationStrategy(
@@ -1041,11 +1050,12 @@ public class MetadataCreateIndexService {
 
     /**
      * Updates index settings to enable remote store by default based on node attributes
+     *
      * @param settingsBuilder index settings builder to be updated with relevant settings
-     * @param clusterState state of cluster
+     * @param clusterState    state of cluster
      * @param clusterSettings cluster level settings
-     * @param nodeSettings node level settings
-     * @param indexName name of index
+     * @param nodeSettings    node level settings
+     * @param indexName       name of index
      */
     public static void updateRemoteStoreSettings(
         Settings.Builder settingsBuilder,
@@ -1413,7 +1423,7 @@ public class MetadataCreateIndexService {
     /**
      * Validates that the configured index data path (if any) is a sub-path of the configured shared data path (if any)
      *
-     * @param settings the index configured settings
+     * @param settings       the index configured settings
      * @param sharedDataPath the configured `path.shared_data` (if any)
      * @return a list containing validaton errors or an empty list if there aren't any errors
      */
