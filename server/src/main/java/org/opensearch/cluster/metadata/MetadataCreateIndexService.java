@@ -213,15 +213,8 @@ public class MetadataCreateIndexService {
 
         // Task is onboarded for throttling, it will get retried from associated TransportClusterManagerNodeAction.
         createIndexTaskKey = clusterService.registerClusterManagerTask(ClusterManagerTaskKeys.CREATE_INDEX_KEY, true);
-        Supplier<Version> minNodeVersionSupplier = () -> clusterService.state().nodes().getMinNodeVersion();
         remoteStoreCustomMetadataResolver = isRemoteDataAttributePresent(settings)
-            ? new RemoteStoreCustomMetadataResolver(
-                remoteStoreSettings,
-                clusterService,
-                minNodeVersionSupplier,
-                repositoriesServiceSupplier,
-                settings
-            )
+            ? new RemoteStoreCustomMetadataResolver(remoteStoreSettings, clusterService, repositoriesServiceSupplier, settings)
             : null;
     }
 

@@ -1757,7 +1757,9 @@ public class MetadataCreateIndexServiceTests extends OpenSearchTestCase {
             .build();
         DiscoveryNodes discoveryNodes = mock(DiscoveryNodes.class);
         DiscoveryNode discoveryNode = mock(DiscoveryNode.class);
-        when(discoveryNode.getAttributes()).thenReturn(Map.of(RemoteStoreCustomMetadataResolver.PATH_TYPE_ATTRIBUTE_KEY, "true"));
+        when(discoveryNode.getAttributes()).thenReturn(
+            Map.of(RemoteStoreCustomMetadataResolver.REMOTE_CUSTOM_METADATA_ATTRIBUTE_KEY, "true")
+        );
         when(discoveryNodes.getNodes()).thenReturn(Map.of("node-1", discoveryNode));
         when(discoveryNodes.getMinNodeVersion()).thenReturn(Version.V_2_15_0);
         ClusterState clusterState = ClusterState.builder(org.opensearch.cluster.ClusterName.CLUSTER_NAME_SETTING.getDefault(Settings.EMPTY))

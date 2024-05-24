@@ -8,7 +8,6 @@
 
 package org.opensearch.index.remote;
 
-import org.opensearch.Version;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
@@ -29,7 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.opensearch.index.remote.RemoteStoreCustomMetadataResolver.PATH_TYPE_ATTRIBUTE_KEY;
+import static org.opensearch.index.remote.RemoteStoreCustomMetadataResolver.REMOTE_CUSTOM_METADATA_ATTRIBUTE_KEY;
 import static org.opensearch.indices.RemoteStoreSettings.CLUSTER_REMOTE_STORE_PATH_HASH_ALGORITHM_SETTING;
 import static org.opensearch.indices.RemoteStoreSettings.CLUSTER_REMOTE_STORE_PATH_TYPE_SETTING;
 import static org.opensearch.indices.RemoteStoreSettings.CLUSTER_REMOTE_STORE_TRANSLOG_METADATA;
@@ -64,7 +63,6 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
         RemoteStoreCustomMetadataResolver resolver = new RemoteStoreCustomMetadataResolver(
             remoteStoreSettings,
             clusterService,
-            () -> Version.V_2_13_0,
             () -> repositoriesService,
             settings
         );
@@ -81,7 +79,6 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
         RemoteStoreCustomMetadataResolver resolver = new RemoteStoreCustomMetadataResolver(
             remoteStoreSettings,
             clusterService,
-            () -> Version.V_2_14_0,
             () -> repositoriesService,
             settings
         );
@@ -103,7 +100,6 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
         RemoteStoreCustomMetadataResolver resolver = new RemoteStoreCustomMetadataResolver(
             remoteStoreSettings,
             clusterService,
-            () -> Version.V_2_14_0,
             () -> repositoriesService,
             settings
         );
@@ -116,26 +112,14 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
             .build();
         clusterSettings = new ClusterSettings(settings, ClusterSettings.BUILT_IN_CLUSTER_SETTINGS);
         remoteStoreSettings = new RemoteStoreSettings(settings, clusterSettings);
-        resolver = new RemoteStoreCustomMetadataResolver(
-            remoteStoreSettings,
-            clusterService,
-            () -> Version.V_2_14_0,
-            () -> repositoriesService,
-            settings
-        );
+        resolver = new RemoteStoreCustomMetadataResolver(remoteStoreSettings, clusterService, () -> repositoriesService, settings);
         assertEquals(PathType.FIXED, resolver.getPathStrategy().getType());
 
         // HASHED_PREFIX type with FNV_1A_COMPOSITE
         settings = Settings.builder().put(CLUSTER_REMOTE_STORE_PATH_TYPE_SETTING.getKey(), PathType.HASHED_PREFIX).build();
         clusterSettings = new ClusterSettings(settings, ClusterSettings.BUILT_IN_CLUSTER_SETTINGS);
         remoteStoreSettings = new RemoteStoreSettings(settings, clusterSettings);
-        resolver = new RemoteStoreCustomMetadataResolver(
-            remoteStoreSettings,
-            clusterService,
-            () -> Version.V_2_14_0,
-            () -> repositoriesService,
-            settings
-        );
+        resolver = new RemoteStoreCustomMetadataResolver(remoteStoreSettings, clusterService, () -> repositoriesService, settings);
         assertEquals(PathType.HASHED_PREFIX, resolver.getPathStrategy().getType());
         assertEquals(PathHashAlgorithm.FNV_1A_COMPOSITE_1, resolver.getPathStrategy().getHashAlgorithm());
 
@@ -143,13 +127,7 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
         settings = Settings.builder().put(CLUSTER_REMOTE_STORE_PATH_TYPE_SETTING.getKey(), PathType.HASHED_PREFIX).build();
         clusterSettings = new ClusterSettings(settings, ClusterSettings.BUILT_IN_CLUSTER_SETTINGS);
         remoteStoreSettings = new RemoteStoreSettings(settings, clusterSettings);
-        resolver = new RemoteStoreCustomMetadataResolver(
-            remoteStoreSettings,
-            clusterService,
-            () -> Version.V_2_14_0,
-            () -> repositoriesService,
-            settings
-        );
+        resolver = new RemoteStoreCustomMetadataResolver(remoteStoreSettings, clusterService, () -> repositoriesService, settings);
         assertEquals(PathType.HASHED_PREFIX, resolver.getPathStrategy().getType());
         assertEquals(PathHashAlgorithm.FNV_1A_COMPOSITE_1, resolver.getPathStrategy().getHashAlgorithm());
 
@@ -160,13 +138,7 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
             .build();
         clusterSettings = new ClusterSettings(settings, ClusterSettings.BUILT_IN_CLUSTER_SETTINGS);
         remoteStoreSettings = new RemoteStoreSettings(settings, clusterSettings);
-        resolver = new RemoteStoreCustomMetadataResolver(
-            remoteStoreSettings,
-            clusterService,
-            () -> Version.V_2_14_0,
-            () -> repositoriesService,
-            settings
-        );
+        resolver = new RemoteStoreCustomMetadataResolver(remoteStoreSettings, clusterService, () -> repositoriesService, settings);
         assertEquals(PathType.HASHED_PREFIX, resolver.getPathStrategy().getType());
         assertEquals(PathHashAlgorithm.FNV_1A_BASE64, resolver.getPathStrategy().getHashAlgorithm());
 
@@ -177,13 +149,7 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
             .build();
         clusterSettings = new ClusterSettings(settings, ClusterSettings.BUILT_IN_CLUSTER_SETTINGS);
         remoteStoreSettings = new RemoteStoreSettings(settings, clusterSettings);
-        resolver = new RemoteStoreCustomMetadataResolver(
-            remoteStoreSettings,
-            clusterService,
-            () -> Version.V_2_14_0,
-            () -> repositoriesService,
-            settings
-        );
+        resolver = new RemoteStoreCustomMetadataResolver(remoteStoreSettings, clusterService, () -> repositoriesService, settings);
         assertEquals(PathType.HASHED_PREFIX, resolver.getPathStrategy().getType());
         assertEquals(PathHashAlgorithm.FNV_1A_BASE64, resolver.getPathStrategy().getHashAlgorithm());
     }
@@ -198,7 +164,6 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
         RemoteStoreCustomMetadataResolver resolver = new RemoteStoreCustomMetadataResolver(
             remoteStoreSettings,
             clusterService,
-            () -> Version.V_2_14_0,
             () -> repositoriesService,
             settings
         );
@@ -253,7 +218,6 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
         RemoteStoreCustomMetadataResolver resolver = new RemoteStoreCustomMetadataResolver(
             remoteStoreSettings,
             clusterService,
-            () -> Version.V_2_14_0,
             () -> repositoriesService,
             settings
         );
@@ -273,10 +237,10 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
         RemoteStoreCustomMetadataResolver resolver = new RemoteStoreCustomMetadataResolver(
             remoteStoreSettings,
             clusterService,
-            () -> Version.CURRENT,
             () -> repositoriesService,
             settings
         );
+        addNode(true);
         assertTrue(resolver.isTranslogMetadataEnabled());
     }
 
@@ -287,10 +251,10 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
         RemoteStoreCustomMetadataResolver resolver = new RemoteStoreCustomMetadataResolver(
             remoteStoreSettings,
             clusterService,
-            () -> Version.CURRENT,
             () -> repositoriesService,
             settings
         );
+        addNode(true);
         assertFalse(resolver.isTranslogMetadataEnabled());
     }
 
@@ -301,7 +265,20 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
         RemoteStoreCustomMetadataResolver resolver = new RemoteStoreCustomMetadataResolver(
             remoteStoreSettings,
             clusterService,
-            () -> Version.V_2_14_0,
+            () -> repositoriesService,
+            settings
+        );
+        addNode(false);
+        assertFalse(resolver.isTranslogMetadataEnabled());
+    }
+
+    public void testTranslogMetadataAllowedWithoutNodes() {
+        Settings settings = Settings.builder().put(CLUSTER_REMOTE_STORE_TRANSLOG_METADATA.getKey(), randomBoolean()).build();
+        ClusterSettings clusterSettings = new ClusterSettings(settings, ClusterSettings.BUILT_IN_CLUSTER_SETTINGS);
+        RemoteStoreSettings remoteStoreSettings = new RemoteStoreSettings(settings, clusterSettings);
+        RemoteStoreCustomMetadataResolver resolver = new RemoteStoreCustomMetadataResolver(
+            remoteStoreSettings,
+            clusterService,
             () -> repositoriesService,
             settings
         );
@@ -312,7 +289,7 @@ public class RemoteStoreCustomMetadataResolverTests extends OpenSearchTestCase {
         DiscoveryNode discoveryNode = mock(DiscoveryNode.class);
         Map<String, String> nodeAttrs;
         if (hashPathTypeAttr) {
-            nodeAttrs = Map.of(PATH_TYPE_ATTRIBUTE_KEY, "true");
+            nodeAttrs = Map.of(REMOTE_CUSTOM_METADATA_ATTRIBUTE_KEY, "true");
         } else {
             nodeAttrs = Collections.emptyMap();
         }

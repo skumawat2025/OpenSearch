@@ -8,7 +8,6 @@
 
 package org.opensearch.index.remote;
 
-import org.opensearch.Version;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.annotation.ExperimentalApi;
@@ -37,25 +36,22 @@ import static org.opensearch.node.remotestore.RemoteStoreNodeAttribute.getRemote
 @ExperimentalApi
 public class RemoteStoreCustomMetadataResolver {
 
-    public final static String PATH_TYPE_ATTRIBUTE_KEY = "optimised_remote_store_enable";
-    public final static String PATH_TYPE_NODE_ATTR_KEY = Node.NODE_ATTRIBUTES.getKey() + PATH_TYPE_ATTRIBUTE_KEY;
+    public final static String REMOTE_CUSTOM_METADATA_ATTRIBUTE_KEY = "optimised_remote_store_enable";
+    public final static String REMOTE_CUSTOM_METADATA_NODE_ATTR_KEY = Node.NODE_ATTRIBUTES.getKey() + REMOTE_CUSTOM_METADATA_ATTRIBUTE_KEY;
 
     private final RemoteStoreSettings remoteStoreSettings;
     private final ClusterService clusterService;
-    private final Supplier<Version> minNodeVersionSupplier;
     private final Supplier<RepositoriesService> repositoriesServiceSupplier;
     private final Settings settings;
 
     public RemoteStoreCustomMetadataResolver(
         RemoteStoreSettings remoteStoreSettings,
         ClusterService clusterService,
-        Supplier<Version> minNodeVersionSupplier,
         Supplier<RepositoriesService> repositoriesServiceSupplier,
         Settings settings
     ) {
         this.remoteStoreSettings = remoteStoreSettings;
         this.clusterService = Objects.requireNonNull(clusterService);
-        this.minNodeVersionSupplier = minNodeVersionSupplier;
         this.repositoriesServiceSupplier = repositoriesServiceSupplier;
         this.settings = settings;
     }
@@ -64,13 +60,13 @@ public class RemoteStoreCustomMetadataResolver {
         PathType pathType;
         PathHashAlgorithm pathHashAlgorithm;
         // Min node version check ensures that we are enabling the new prefix type only when all the nodes understand it.
-        pathType = isPathTypeEnabled() ? remoteStoreSettings.getPathType() : PathType.FIXED;
+        pathType = isRemoteCustomMetadataEnabled() ? remoteStoreSettings.getPathType() : PathType.FIXED;
         // If the path type is fixed, hash algorithm is not applicable.
         pathHashAlgorithm = pathType == PathType.FIXED ? null : remoteStoreSettings.getPathHashAlgorithm();
         return new RemoteStorePathStrategy(pathType, pathHashAlgorithm);
     }
 
-    private boolean isPathTypeEnabled() {
+    private boolean isRemoteCustomMetadataEnabled() {
         Map<String, DiscoveryNode> nodesMap = Collections.unmodifiableMap(clusterService.state().nodes().getNodes());
 
         if (nodesMap.isEmpty()) {
@@ -80,7 +76,7 @@ public class RemoteStoreCustomMetadataResolver {
         for (String node : nodesMap.keySet()) {
             DiscoveryNode nodeDiscovery = nodesMap.get(node);
             Map<String, String> nodeAttributes = nodeDiscovery.getAttributes();
-            if (!nodeAttributes.containsKey(PATH_TYPE_ATTRIBUTE_KEY)) {
+            if (!nodeAttributes.containsKey(REMOTE_CUSTOM_METADATA_ATTRIBUTE_KEY)) {
                 return false;
             }
         }
@@ -95,7 +91,7 @@ public class RemoteStoreCustomMetadataResolver {
             throw new IllegalArgumentException("Repository should be created before creating index with remote_store enabled setting", ex);
         }
         BlobStoreRepository blobStoreRepository = (BlobStoreRepository) repository;
-        return Version.V_2_15_0.compareTo(minNodeVersionSupplier.get()) <= 0
+        return isRemoteCustomMetadataEnabled()
             && remoteStoreSettings.isTranslogMetadataEnabled()
             && blobStoreRepository.blobStore().isBlobMetadataEnabled();
     }
