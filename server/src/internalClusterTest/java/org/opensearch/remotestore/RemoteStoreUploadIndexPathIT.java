@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 
 import static org.opensearch.gateway.remote.RemoteClusterStateService.REMOTE_CLUSTER_STATE_ENABLED_SETTING;
+import static org.opensearch.index.remote.RemoteStoreCustomMetadataResolver.REMOTE_CUSTOM_METADATA_NODE_ATTR_KEY;
 import static org.opensearch.indices.RemoteStoreSettings.CLUSTER_REMOTE_STORE_PATH_TYPE_SETTING;
 import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 
@@ -33,7 +34,11 @@ public class RemoteStoreUploadIndexPathIT extends RemoteStoreBaseIntegTestCase {
 
     @Override
     protected Settings nodeSettings(int nodeOrdinal) {
-        return Settings.builder().put(super.nodeSettings(nodeOrdinal)).put(REMOTE_CLUSTER_STATE_ENABLED_SETTING.getKey(), true).build();
+        return Settings.builder()
+            .put(super.nodeSettings(nodeOrdinal))
+            .put(REMOTE_CLUSTER_STATE_ENABLED_SETTING.getKey(), true)
+            .put(REMOTE_CUSTOM_METADATA_NODE_ATTR_KEY, true)
+            .build();
     }
 
     /**
@@ -41,6 +46,7 @@ public class RemoteStoreUploadIndexPathIT extends RemoteStoreBaseIntegTestCase {
      * wherever not required.
      */
     public void testRemoteIndexPathFileCreation() throws ExecutionException, InterruptedException, IOException {
+        asyncUploadMockFsRepo = false;
         String clusterManagerNode = internalCluster().startClusterManagerOnlyNode();
         internalCluster().startDataOnlyNodes(2);
 
