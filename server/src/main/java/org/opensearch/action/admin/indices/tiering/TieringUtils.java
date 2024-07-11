@@ -11,7 +11,12 @@ package org.opensearch.action.admin.indices.tiering;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.routing.ShardRouting;
 import org.opensearch.cluster.routing.allocation.RoutingAllocation;
+import org.opensearch.core.index.Index;
 import org.opensearch.index.IndexModule;
+
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Utility class for tiering operations
@@ -43,5 +48,18 @@ public class TieringUtils {
     public static boolean isPartialIndex(final IndexMetadata indexMetadata) {
         return IndexModule.DataLocalityType.PARTIAL.name()
             .equals(indexMetadata.getSettings().get(IndexModule.INDEX_STORE_LOCALITY_SETTING.getKey()));
+    }
+    /**
+     * Constructs a HotToWarmTieringResponse from the rejected indices map
+     *
+     * @param rejectedIndices the rejected indices map
+     * @return the HotToWarmTieringResponse object
+     */
+    public static HotToWarmTieringResponse constructToHotToWarmTieringResponse(final Map<Index, String> rejectedIndices) {
+        final List<HotToWarmTieringResponse.IndexResult> indicesResult = new LinkedList<>();
+        for (Map.Entry<Index, String> rejectedIndex : rejectedIndices.entrySet()) {
+            indicesResult.add(new HotToWarmTieringResponse.IndexResult(rejectedIndex.getKey().getName(), rejectedIndex.getValue()));
+        }
+        return new HotToWarmTieringResponse(true, indicesResult);
     }
 }
