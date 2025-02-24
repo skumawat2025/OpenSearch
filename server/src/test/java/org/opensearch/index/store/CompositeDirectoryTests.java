@@ -65,6 +65,12 @@ public class CompositeDirectoryTests extends BaseRemoteSegmentStoreDirectoryTest
         assertArrayEquals(expectedFileNames, actualFileNames);
     }
 
+    public void testLocalFiles() throws IOException {
+        String[] actualFileNames = compositeDirectory.listLocalFiles();
+        String[] expectedFileNames = new String[] { "_0.cfe_block_7", "_0.cfs_block_7", "_1.cfe", "_2.cfe", "temp_file.tmp" };
+        assertArrayEquals(expectedFileNames, actualFileNames);
+    }
+
     public void testDeleteFile() throws IOException {
         assertTrue(existsInCompositeDirectory(FILE_PRESENT_LOCALLY));
         // Delete the file and assert that it no more is a part of the directory

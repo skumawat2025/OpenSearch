@@ -75,21 +75,32 @@ public class CompositeDirectory extends FilterDirectory {
     }
 
     /**
+     * Returns names of all files stored in local directory
+     * @throws IOException in case of I/O error
+     */
+    public String[] listLocalFiles() throws IOException {
+        ensureOpen();
+        logger.trace("Composite Directory[{}]: listLocalOnly() called", this::toString);
+        return localDirectory.listAll();
+    }
+
+    /**
      * Returns names of all files stored in this directory in sorted order
      * Does not include locally stored block files (having _block_ in their names) and files pending deletion
      *
      * @throws IOException in case of I/O error
      */
+    // TODO: Revisit listAll() implementation, Check if we should include the remote files as well.
     @Override
     public String[] listAll() throws IOException {
         ensureOpen();
         logger.trace("Composite Directory[{}]: listAll() called", this::toString);
         String[] localFiles = localDirectory.listAll();
+        String[] remoteFiles = getRemoteFiles();
         Set<String> allFiles = new HashSet<>(Arrays.asList(localFiles));
-        // String[] remoteFiles = getRemoteFiles();
-        // allFiles.addAll(Arrays.asList(remoteFiles));
+        allFiles.addAll(Arrays.asList(remoteFiles));
         logger.trace("Composite Directory[{}]: Local Directory files - {}", this::toString, () -> Arrays.toString(localFiles));
-        // logger.trace("Composite Directory[{}]: Remote Directory files - {}", this::toString, () -> Arrays.toString(remoteFiles));
+        logger.trace("Composite Directory[{}]: Remote Directory files - {}", this::toString, () -> Arrays.toString(remoteFiles));
         Set<String> nonBlockLuceneFiles = allFiles.stream()
             .filter(file -> !FileTypeUtils.isBlockFile(file))
             .collect(Collectors.toUnmodifiableSet());
@@ -112,13 +123,18 @@ public class CompositeDirectory extends FilterDirectory {
         logger.trace("Composite Directory[{}]: deleteFile() called {}", this::toString, () -> name);
         if (FileTypeUtils.isTempFile(name)) {
             localDirectory.deleteFile(name);
-        } else if (Arrays.asList(listAll()).contains(name) == false) {
-            logger.debug("The file [{}] does not exist", name);
-            // we should not fail here as localDirectory might not contain this file.
-            // throw new NoSuchFileException("File " + name + " not found in directory");
+        } else if (Arrays.asList(listLocalFiles()).contains(name) == false) {
+            logger.debug("The file [{}] does not exist in local directory", name);
+            // we should not throw exception in this case as localDirectory might not contain this file.
         } else {
-            localDirectory.deleteFile(name);
-            fileCache.remove(getFilePath(name));
+            // It is possible that filecache doesn't have the file, but localdirectory contains the file. We will delete it from the
+            // localDirectory.
+            if (fileCache.get(getFilePath(name)) == null) {
+                logger.info("The file [{}] exist in local but not part of FileCache, deleting it from local", name);
+                localDirectory.deleteFile(name);
+            } else {
+                fileCache.remove(getFilePath(name));
+            }
         }
     }
 

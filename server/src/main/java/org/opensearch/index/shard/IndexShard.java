@@ -5160,8 +5160,10 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                         store.deleteQuiet(file);
                     }
                 }
-                assert Arrays.stream(store.directory().listAll()).filter(f -> f.startsWith(IndexFileNames.SEGMENTS)).findAny().isEmpty()
-                    : "There should not be any segments file in the dir";
+                if (indexSettings.isStoreLocalityPartial() == false) {
+                    assert Arrays.stream(store.directory().listAll()).filter(f -> f.startsWith(IndexFileNames.SEGMENTS)).findAny().isEmpty()
+                        : "There should not be any segments file in the dir";
+                }
                 store.commitSegmentInfos(infosSnapshot, processedLocalCheckpoint, processedLocalCheckpoint);
             }
             syncSegmentSuccess = true;

@@ -193,6 +193,8 @@ public class SegmentedCache<K, V> implements RefCountedCache<K, V> {
             if (cache.size() > 0) {
                 logger.trace("SegmentedCache " + i);
                 ((LRUCache<K, V>) cache).logCurrentState();
+            } else {
+                logger.trace("SegmentedCache is empty");
             }
             i++;
         }
