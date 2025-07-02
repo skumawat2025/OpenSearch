@@ -273,6 +273,7 @@ tasks.register("branchConsistency") {
   dependsOn ":verifyVersions", ":verifyBwcTestsEnabled"
 }
 
+
 allprojects {
   // configure compiler options
   tasks.withType(JavaCompile).configureEach { JavaCompile compile ->
@@ -753,4 +754,8 @@ allprojects { project ->
       checkCompatibility.dependsOn(project.tasks.publishToMavenLocal)
     }
   }
+}
+
+testClusters.all {
+  numberOfNodes = 3
 }

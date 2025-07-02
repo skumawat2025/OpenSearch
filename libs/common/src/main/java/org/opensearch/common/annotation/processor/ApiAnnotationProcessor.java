@@ -75,30 +75,30 @@ public class ApiAnnotationProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment round) {
-        processingEnv.getMessager().printMessage(Kind.NOTE, "Processing OpenSearch Api annotations");
-
-        if (processingEnv.getOptions().containsKey(OPTION_CONTINUE_ON_FAILING_CHECKS) == true) {
-            reportFailureAs = Kind.NOTE;
-        }
-
-        final Set<? extends Element> elements = round.getElementsAnnotatedWithAny(
-            Set.of(PublicApi.class, ExperimentalApi.class, DeprecatedApi.class)
-        );
-
-        for (var element : elements) {
-            validate(element);
-
-            if (!checkPackage(element)) {
-                continue;
-            }
-
-            // Skip all not-public elements
-            checkPublicVisibility(null, element);
-
-            if (element instanceof TypeElement) {
-                process((TypeElement) element);
-            }
-        }
+//        processingEnv.getMessager().printMessage(Kind.NOTE, "Processing OpenSearch Api annotations");
+//
+//        if (processingEnv.getOptions().containsKey(OPTION_CONTINUE_ON_FAILING_CHECKS) == true) {
+//            reportFailureAs = Kind.NOTE;
+//        }
+//
+//        final Set<? extends Element> elements = round.getElementsAnnotatedWithAny(
+//            Set.of(PublicApi.class, ExperimentalApi.class, DeprecatedApi.class)
+//        );
+//
+//        for (var element : elements) {
+//            validate(element);
+//
+//            if (!checkPackage(element)) {
+//                continue;
+//            }
+//
+//            // Skip all not-public elements
+//            checkPublicVisibility(null, element);
+//
+//            if (element instanceof TypeElement) {
+//                process((TypeElement) element);
+//            }
+//        }
 
         return false;
     }

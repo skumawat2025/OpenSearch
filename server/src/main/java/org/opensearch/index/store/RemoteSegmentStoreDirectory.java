@@ -15,16 +15,11 @@ import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.index.SegmentCommitInfo;
 import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.index.SegmentInfos;
-import org.apache.lucene.store.ByteBuffersDataOutput;
-import org.apache.lucene.store.ByteBuffersIndexOutput;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FilterDirectory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.*;
 import org.apache.lucene.util.Version;
 import org.opensearch.common.UUIDs;
 import org.opensearch.common.annotation.PublicApi;
+import org.opensearch.common.blobstore.BlobContainer;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.io.VersionedCodecStreamWrapper;
 import org.opensearch.common.logging.Loggers;
@@ -47,6 +42,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -61,6 +57,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+
+import static org.opensearch.index.store.RemoteStoreFileDownloader.uploadS3File;
 
 /**
  * A RemoteDirectory extension for remote segment store. We need to make sure we don't overwrite a segment file once uploaded.
@@ -140,6 +138,10 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
         this.metadataFilePinnedTimestampMap = new HashMap<>();
         this.logger = Loggers.getLogger(getClass(), shardId);
         init();
+    }
+
+    public BlobContainer getBlobContainer() {
+        return remoteDataDirectory.getBlobContainer();
     }
 
     /**
@@ -561,6 +563,24 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
         }
     }
 
+    public void uploadInRust(Directory from, String src, String remoteFileName, ActionListener<Void> listener ) throws IOException {
+        // call the sync rust function
+        BlobContainer blobContainer = remoteDataDirectory.getBlobContainer();
+        String bucketName = blobContainer.getBucketName();
+        String remoteFileKey = blobContainer.getFilePath(remoteFileName);
+        Path srcFilePath = ((FSDirectory) FilterDirectory.unwrap(from)).getDirectory().resolve(src);
+
+        //uploadS3File(String filePath, String bucket, String key);
+        logger.info("Calling uploadFileInRust() for file: {}", src);
+        boolean uploaded = uploadS3File(String.valueOf(srcFilePath), bucketName, remoteFileKey);
+        if (uploaded) {
+            postUpload(from, src, remoteFileName, getChecksumOfLocalFile(from, src));
+            listener.onResponse(null);
+        } else {
+            listener.onFailure(new IOException("failed to upload file in rust [" + src + "]"));
+        }
+    }
+
     /**
      * Copies a file from the source directory to a remote based on multi-stream upload support.
      * If vendor plugin supports uploading multiple parts in parallel, <code>BlobContainer#writeBlobByStreams</code>
@@ -575,17 +595,26 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
     public void copyFrom(Directory from, String src, IOContext context, ActionListener<Void> listener, boolean lowPriorityUpload) {
         try {
             final String remoteFileName = getNewRemoteSegmentFilename(src);
-            boolean uploaded = remoteDataDirectory.copyFrom(from, src, remoteFileName, context, () -> {
+            threadPool.executor(ThreadPool.Names.GENERIC).execute(() ->
+            {
                 try {
-                    postUpload(from, src, remoteFileName, getChecksumOfLocalFile(from, src));
+                    uploadInRust(from, src, remoteFileName, listener);
                 } catch (IOException e) {
-                    throw new RuntimeException("Exception in segment postUpload for file " + src, e);
+                    logger.error("failed to upload file in rust [" + src + "]", e);
                 }
-            }, listener, lowPriorityUpload);
-            if (uploaded == false) {
-                copyFrom(from, src, src, context);
-                listener.onResponse(null);
-            }
+            });
+
+//            boolean uploaded = remoteDataDirectory.copyFrom(from, src, remoteFileName, context, () -> {
+//                try {
+//                    postUpload(from, src, remoteFileName, getChecksumOfLocalFile(from, src));
+//                } catch (IOException e) {
+//                    throw new RuntimeException("Exception in segment postUpload for file " + src, e);
+//                }
+//            }, listener, lowPriorityUpload);
+//            if (uploaded == false) {
+//                copyFrom(from, src, src, context);
+//                listener.onResponse(null);
+//            }
         } catch (Exception e) {
             logger.warn(() -> new ParameterizedMessage("Exception while uploading file {} to the remote segment store", src), e);
             listener.onFailure(e);
@@ -817,7 +846,7 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
         }
     }
 
-    private String getExistingRemoteFilename(String localFilename) {
+    public String getExistingRemoteFilename(String localFilename) {
         if (segmentsUploadedToRemoteStore.containsKey(localFilename)) {
             return segmentsUploadedToRemoteStore.get(localFilename).uploadedFilename;
         } else {

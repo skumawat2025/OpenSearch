@@ -114,7 +114,7 @@ import static org.opensearch.repositories.s3.S3Repository.MAX_FILE_SIZE_USING_MU
 import static org.opensearch.repositories.s3.S3Repository.MIN_PART_SIZE_USING_MULTIPART;
 import static org.opensearch.repositories.s3.utils.SseKmsUtil.configureEncryptionSettings;
 
-class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamBlobContainer {
+public class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamBlobContainer {
 
     private static final Logger logger = LogManager.getLogger(S3BlobContainer.class);
     private static final long DEFAULT_OPERATION_TIMEOUT = TimeUnit.SECONDS.toSeconds(30);
@@ -159,6 +159,14 @@ class S3BlobContainer extends AbstractBlobContainer implements AsyncMultiStreamB
     @Override
     public InputStream readBlob(String blobName) throws IOException {
         return new S3RetryingInputStream(blobStore, buildKey(blobName));
+    }
+
+    public String getBucketName() {
+        return blobStore.bucket();
+    }
+
+    public String getFilePath(String fileName) {
+        return buildKey(fileName);
     }
 
     @Override

@@ -144,6 +144,14 @@ public interface BlobContainer {
      */
     void writeBlob(String blobName, InputStream inputStream, long blobSize, boolean failIfAlreadyExists) throws IOException;
 
+    default public String getFilePath(String fileName) {
+        throw new UnsupportedOperationException();
+    }
+
+    default public String getBucketName() {
+        throw new UnsupportedOperationException();
+    }
+
     /**
      * Reads blob content from the input stream and writes it to the container in a new blob with the given name, and metadata.
      * This method assumes the container does not already contain a blob of the same blobName. If a blob by the

@@ -10,11 +10,14 @@ package org.opensearch.index.store;
 
 import org.apache.logging.log4j.Logger;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.FilterDirectory;
 import org.apache.lucene.store.IOContext;
 import org.opensearch.action.support.GroupedActionListener;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.common.Nullable;
 import org.opensearch.common.annotation.PublicApi;
+import org.opensearch.common.blobstore.BlobContainer;
 import org.opensearch.common.logging.Loggers;
 import org.opensearch.common.util.CancellableThreads;
 import org.opensearch.core.action.ActionListener;
@@ -23,6 +26,7 @@ import org.opensearch.indices.recovery.RecoverySettings;
 import org.opensearch.threadpool.ThreadPool;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -40,6 +44,24 @@ public final class RemoteStoreFileDownloader {
     private final Logger logger;
     private final ThreadPool threadPool;
     private final RecoverySettings recoverySettings;
+
+    private static native boolean readS3File(String bucket, String key, String destPath);
+    static native boolean uploadS3File(String filePath, String bucket, String key);
+
+
+    static {
+        // This actually loads the shared object that we'll be creating.
+        // The actual location of the .so or .dll may differ based on your
+        // platform.
+        try {
+            System.out.println("Loading native rust library...");
+            System.load("/usr/share/opensearch/lib/native/libmylib.so");
+            System.out.println("Native library loaded successfully");
+        } catch (UnsatisfiedLinkError e) {
+            System.err.println("Failed to load native library: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 
     public RemoteStoreFileDownloader(ShardId shardId, ThreadPool threadPool, RecoverySettings recoverySettings) {
         this.logger = Loggers.getLogger(RemoteStoreFileDownloader.class, shardId);
@@ -148,7 +170,23 @@ public final class RemoteStoreFileDownloader {
                 logger.trace("Downloading file {}", file);
                 try {
                     cancellableThreads.executeIO(() -> {
-                        destination.copyFrom(source, file, file, IOContext.DEFAULT);
+                        try {
+                            logger.info("Stating file download in rust", file);
+                            BlobContainer blobContainer = ((RemoteSegmentStoreDirectory)source).getBlobContainer();
+                            String bucketName = blobContainer.getBucketName();
+                            String fileKey = blobContainer.getFilePath(((RemoteSegmentStoreDirectory)source).getExistingRemoteFilename(file));
+                            Path destinationPath = ((FSDirectory) FilterDirectory.unwrap(destination)).getDirectory().resolve(file);
+                            boolean didDownload = readS3File(bucketName, fileKey, destinationPath.toString());
+                            if (didDownload == false) {
+                                throw new IOException("Failed to read file " + file);
+                            }
+                            // comment out the original s3 upload calls.
+                            // logger.trace("Downloading file {}", file);
+                            // destination.copyFrom(source, file, file, IOContext.DEFAULT);
+                        } catch (Exception e){
+                            logger.error("Switch back to normal download - with name", e);
+                            destination.copyFrom(source, file, file, IOContext.DEFAULT);
+                        }
                         logger.trace("Downloaded file {} of size {}", file, destination.fileLength(file));
                         onFileCompletion.run();
                         if (secondDestination != null) {

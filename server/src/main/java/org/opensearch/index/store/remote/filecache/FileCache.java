@@ -240,6 +240,7 @@ public class FileCache implements RefCountedCache<Path, CachedIndexInput> {
             }
         }).filter(Files::isRegularFile).forEach(path -> {
             try {
+                logger.info("Restoring file cache entry [{}]", path);
                 put(path.toAbsolutePath(), new RestoredCachedIndexInput(Files.size(path)));
                 decRef(path.toAbsolutePath());
             } catch (IOException e) {

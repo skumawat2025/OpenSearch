@@ -76,7 +76,7 @@ public class TransferManager {
             return AccessController.doPrivileged((PrivilegedExceptionAction<IndexInput>) () -> {
                 CachedIndexInput cacheEntry = fileCache.compute(key, (path, cachedIndexInput) -> {
                     if (cachedIndexInput == null || cachedIndexInput.isClosed()) {
-                        logger.trace("Transfer Manager - IndexInput closed or not in cache");
+                        logger.info("Transfer Manager - IndexInput closed or not in cache for file [{}]", key.toString());
                         // Doesn't exist or is closed, either way create a new one
                         return new DelayedCreationCachedIndexInput(fileCache, streamReader, blobFetchRequest);
                     } else {
@@ -123,7 +123,7 @@ public class TransferManager {
                 );
             }
             if (Files.exists(request.getFilePath()) == false) {
-                logger.trace("Fetching from Remote in createIndexInput of Transfer Manager");
+                logger.info("Fetching from Remote in createIndexInput of Transfer Manager for file [{}]", request.getFilePath());
                 try (
                     OutputStream fileOutputStream = Files.newOutputStream(request.getFilePath());
                     OutputStream localFileOutputStream = new BufferedOutputStream(fileOutputStream)
